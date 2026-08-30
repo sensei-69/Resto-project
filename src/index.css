@@ -1,0 +1,27 @@
+/* Global base styles.
+   Page-specific styling lives in each feature's own stylesheet
+   (LandingPage.css, register.css, LoginPage.css, admin/styles.css). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: #fffdf8;
+  color: #171717;
+}
+
+#root {
+  min-height: 100svh;
+}
