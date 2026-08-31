@@ -4,6 +4,8 @@ import cors from "cors";
 import authRoutes from "./routes/auth.js";
 import ticketRoutes from "./routes/tickets.js";
 import catalogRoutes from "./routes/catalog.js";
+import offerRoutes from "./routes/offers.js";
+import orderRoutes from "./routes/orders.js";
 
 const app = express();
 
@@ -15,11 +17,14 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/catalog", catalogRoutes);
+app.use("/api/offers", offerRoutes);
+app.use("/api/orders", orderRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
+  if (err.status) return res.status(err.status).json({ error: err.message });
   console.error(err);
   res.status(500).json({ error: "Internal server error" });
 });
