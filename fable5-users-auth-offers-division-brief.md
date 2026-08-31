@@ -63,6 +63,11 @@ USER/DELIVERY.
   shell Sign out calls logout(); admin.tsx drives role/person from
   AuthContext with Users nav gated to Super Admin; /admin/users behind
   RequireRole(SUPER_ADMIN); admin.users.tsx rebuilt on /api/users.
+- **Landing offers section** (!10): #offers section lists active offers
+  from GET /api/offers (type badge, availability window, item thumbnails +
+  quantities, whole-menu tag, price/discount); priced packs add straight
+  to the cart via new CartContext.registerFood(); unpriced discounts link
+  to /menu; section hidden when no offer is live.
 
 ## Manual steps (project owner, not agent)
 
@@ -74,16 +79,11 @@ USER/DELIVERY.
 
 ## REMAINING WORK
 
-### 4b. Customer-facing offers section on the landing page (requested)
+### 4b. Overview analytics (follow-up)
 
-The navbar already links to #offers (with a badge) but no such section
-exists. Build a landing-page Offers section that lists ACTIVE offers from
-GET /api/offers (title, type, price/discount, availability window, item
-thumbnails + quantities / "Whole menu") and lets the visitor order from it
-(add the offer's items to the cart via CartContext).
-
-Note: admin.index.tsx analytics stays mock for now — no analytics
-endpoints exist yet; flag as follow-up.
+admin.index.tsx is still mock — no analytics endpoints exist yet. Needs
+backend aggregates (revenue/orders by day/month/year, top foods, feedback)
+before the overview page can go live-data.
 
 ### 5. Missing pages (mock data exists unused: myOrders, deliveries, riderWeek, trendingFoods)
 
