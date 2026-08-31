@@ -1,5 +1,6 @@
 import { Navbar } from "./Navbar";
 import { Hero } from "./Hero";
+import { Offers } from "./Offers";
 import { Values } from "./Values";
 import { DishShow } from "./DishShow";
 import { Location } from "./Location";
@@ -20,6 +21,7 @@ export default function LandingPage() {
       <Navbar />
       <main>
         <Hero onMenuClick={handleMenuClick} />
+        <Offers />
         <DishShow />
         <Values />
         <Location />
