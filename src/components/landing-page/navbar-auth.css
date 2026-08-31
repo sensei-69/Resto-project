@@ -1,0 +1,202 @@
+/* Auth-gated navbar: account dropdown, My Space cluster, ticket modal */
+
+.lp-acct,
+.lp-myspace {
+  position: relative;
+}
+
+.lp-myspace {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lp-myspace-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lp-avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+}
+
+.lp-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.lp-acct-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 230px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  padding: 0.4rem;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+}
+
+.lp-acct-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.55rem 0.65rem 0.65rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  margin-bottom: 0.3rem;
+}
+
+.lp-acct-head strong {
+  font-size: 0.9rem;
+  color: #1c1c1c;
+}
+
+.lp-acct-head span {
+  font-size: 0.75rem;
+  color: #777;
+}
+
+.lp-acct-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2b2b2b;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lp-acct-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.lp-acct-item--static {
+  cursor: default;
+}
+
+.lp-acct-item--static:hover {
+  background: transparent;
+}
+
+.lp-acct-item--static b {
+  margin-left: auto;
+  font-weight: 800;
+}
+
+.lp-acct-item--danger {
+  color: #b12727;
+}
+
+.lp-acct-item--danger:hover {
+  background: rgba(177, 39, 39, 0.08);
+}
+
+/* Ticket modal */
+
+.lp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+  padding: 1rem;
+}
+
+.lp-modal {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lp-modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1c1c1c;
+}
+
+.lp-modal-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.lp-modal-textarea {
+  resize: vertical;
+}
+
+.lp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.lp-modal-btn {
+  padding: 0.55rem 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lp-modal-btn--primary {
+  background: #1c1c1c;
+  border-color: #1c1c1c;
+  color: #fff;
+}
+
+.lp-modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lp-modal-ok {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #1d7a35;
+  font-weight: 600;
+}
+
+.lp-modal-err {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #c0392b;
+  font-weight: 600;
+}

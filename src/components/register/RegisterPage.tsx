@@ -7,6 +7,7 @@ import { RoleStep } from "./steps/RoleStep";
 import { AccountStep } from "./steps/AccountStep";
 import { PaymentStep } from "./steps/PaymentStep";
 import { DeliveryStep } from "./steps/DeliveryStep";
+import { useAuth } from "../../context/AuthContext";
 
 type StepId = "role" | "account" | "payment" | "delivery" | "done";
 
@@ -16,9 +17,12 @@ const FLOWS: Record<Role, StepId[]> = {
 };
 
 export default function RegisterPage() {
+  const { register } = useAuth();
   const [role, setRole] = useState<Role | null>(null);
   const [index, setIndex] = useState(0);
   const [data, setData] = useState<RegisterData>(emptyData);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const steps = useMemo(() => (role ? FLOWS[role] : ["role", "account", "payment", "done"]), [role]);
   const current = steps[index] ?? "role";
@@ -27,7 +31,33 @@ export default function RegisterPage() {
   const set = <K extends keyof RegisterData>(key: K, value: RegisterData[K]) =>
     setData((prev) => ({ ...prev, [key]: value }));
 
-  const next = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
+  const advance = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
+
+  // Create the real account when leaving the last data step.
+  const next = async () => {
+    if (steps[index + 1] !== "done") {
+      advance();
+      return;
+    }
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await register({
+        name: `${data.firstName} ${data.lastName}`.trim() || data.email,
+        email: data.email,
+        phone: data.phone || undefined,
+        password: data.password,
+        role: role ?? "consumer",
+      });
+      advance();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed \u2014 please try again");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const back = () => setIndex((i) => Math.max(i - 1, 0));
 
   const stepProps = { data, set, next, back };
@@ -48,7 +78,7 @@ export default function RegisterPage() {
             Join the <span>big bite</span>
           </h1>
           <p className="rg-sub">
-            A few quick steps and you're in — order or deliver, your call.
+            A few quick steps and you're in \u2014 order or deliver, your call.
           </p>
         </header>
 
@@ -74,6 +104,26 @@ export default function RegisterPage() {
               );
             })}
           </nav>
+        ) : null}
+
+        {error ? (
+          <p
+            role="alert"
+            style={{
+              color: "#c0392b",
+              textAlign: "center",
+              margin: "0.75rem 0 0",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </p>
+        ) : null}
+        {submitting ? (
+          <p style={{ textAlign: "center", margin: "0.75rem 0 0", fontSize: "0.9rem" }}>
+            Creating your account\u2026
+          </p>
         ) : null}
 
         {current === "role" ? (
