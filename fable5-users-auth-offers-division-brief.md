@@ -53,6 +53,11 @@ USER/DELIVERY.
   ineligible attachments ("Allow in category" or remove; save blocked);
   save requires name + division/category + price; product cards live-PATCH
   price/availability and DELETE via the API.
+- **Offers UI** (!7): admin.offers.tsx rebuilt API-driven — picture-based
+  dish picker with quantity steppers; offers created with real
+  {id_product, quantity} items via /api/offers; explicit
+  applies_to_whole_menu toggle replaces the "Whole menu" magic string;
+  pause/activate/delete hit the API.
 
 ## Manual steps (project owner, not agent)
 
@@ -63,16 +68,6 @@ USER/DELIVERY.
    `UPDATE users SET role='OWNER' WHERE email='...';` (same for SUPER_ADMIN).
 
 ## REMAINING WORK
-
-### 3. `src/admin/routes/admin.offers.tsx` rework (DB model is ready)
-
-- Pick dishes visually: thumbnail next to each name (MenuItem.image with
-  category placeholder fallback; ensure seed dishes have real images).
-- Replace `Offer.items: string[]` usage with `{ id_product, quantity }`
-  ("4x Double Smash" = quantity 4) via the offers API.
-- Replace the `"Whole menu"` magic string with the real
-  `applies_to_whole_menu` boolean.
-- Update `Offer` type in `src/admin/lib/dashboard-data.ts` accordingly.
 
 ### 4. Wire admin to real data
 
