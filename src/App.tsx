@@ -7,6 +7,9 @@ import FoodSelectUI from "./components/food-select-page";
 import LoginPage from "./components/LoginPage";
 import RegisterPage from "./components/register/RegisterPage";
 import UserDashboard from "./components/user-dashboard/UserDashboard";
+import MyOrdersPage from "./components/MyOrdersPage";
+import DeliveryDashboard from "./components/DeliveryDashboard";
+import TicketsPage from "./components/TicketsPage";
 import { GlobalCartDrawer } from "./components/GlobalCartDrawer";
 import AdminLayout from "./admin/routes/admin";
 import AdminOverview from "./admin/routes/admin.index";
@@ -30,6 +33,13 @@ export default function App() {
             {/* Any signed-in role */}
             <Route element={<RequireAuth />}>
               <Route path="/dashboard" element={<UserDashboard />} />
+              <Route path="/my-orders" element={<MyOrdersPage />} />
+              <Route path="/tickets" element={<TicketsPage />} />
+            </Route>
+
+            {/* Delivery riders */}
+            <Route element={<RequireRole roles={["DELIVERY"]} />}>
+              <Route path="/delivery" element={<DeliveryDashboard />} />
             </Route>
 
             {/* One /admin shell, gated by role (Owner + Super Admin) */}
