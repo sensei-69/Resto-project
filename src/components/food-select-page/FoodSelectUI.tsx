@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft, Heart, Search, ShoppingCart, User } from "lucide-react";
-import { CATEGORIES, DIVISIONS } from "./data";
+import { ChevronLeft, Heart, Loader2, Search, ShoppingCart, User } from "lucide-react";
+import { CATEGORIES } from "./data";
+import { useCatalog } from "./useCatalog";
 import { CategoryRail } from "./CategoryRail";
 import { FoodGrid } from "./FoodGrid";
 import { useCart } from "../../context/CartContext";
-import type { CategorySection, CategorySortKey, FoodCategory, FoodItem } from "./types";
+import type { CategorySortKey, FoodCategory, FoodItem } from "./types";
 import "./FoodSelectUI.css";
 
 function catPopularity(cat: FoodCategory) {
@@ -29,7 +30,8 @@ function findCatAndSub(foodId: string) {
 export default function FoodSelectUI() {
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const { categories: liveCats, sections: liveSections, allItems: liveAllItems, loading: catalogLoading } = useCatalog();
+
   const {
     lines,
     pending,
@@ -53,8 +55,21 @@ export default function FoodSelectUI() {
     toggleUnitAddOn,
   } = useCart();
 
-  const [openCategoryId, setOpenCategoryId] = useState(CATEGORIES[0]!.id);
-  const [activeSubId, setActiveSubId] = useState(CATEGORIES[0]!.subcategories[0]!.id);
+  const firstCat = liveCats[0] ?? CATEGORIES[0]!;
+  const [openCategoryId, setOpenCategoryId] = useState(firstCat.id);
+  const [activeSubId, setActiveSubId] = useState(firstCat.subcategories[0]!.id);
+
+  // When the live catalog loads, reset selection to the first live category.
+  const didInitLive = useRef(false);
+  useEffect(() => {
+    if (catalogLoading || didInitLive.current) return;
+    didInitLive.current = true;
+    const first = liveCats[0];
+    if (first) {
+      setOpenCategoryId(first.id);
+      setActiveSubId(first.subcategories[0]?.id ?? "");
+    }
+  }, [catalogLoading, liveCats]);
   const [dishQuery, setDishQuery] = useState("");
   const [catSort, setCatSort] = useState<CategorySortKey>("universal");
   const [luckySeed, setLuckySeed] = useState(0);
@@ -78,7 +93,7 @@ export default function FoodSelectUI() {
   }, [location.state]);
 
   const sortedCategories = useMemo(() => {
-    const list = [...CATEGORIES];
+    const list = [...liveCats];
     if (catSort === "universal") return list;
     if (catSort === "alpha") return list.sort((a, b) => a.name.localeCompare(b.name));
     if (catSort === "popular") return list.sort((a, b) => catPopularity(b) - catPopularity(a));
@@ -94,40 +109,22 @@ export default function FoodSelectUI() {
       .map((e) => e.c);
   }, [catSort, favorites, luckySeed]);
 
-  const sections = useMemo<CategorySection[]>(() => {
+  const sections = useMemo(() => {
     if (catSort !== "universal") {
       return [{ id: "all", categories: sortedCategories }];
     }
-    const used = new Set<string>();
-    const grouped = DIVISIONS.map((d) => {
-      const categories = d.categoryIds
-        .map((id) => CATEGORIES.find((c) => c.id === id))
-        .filter((c): c is FoodCategory => Boolean(c));
-      categories.forEach((c) => used.add(c.id));
-      return { id: d.id, label: d.label, arabic: d.arabic, categories };
-    }).filter((s) => s.categories.length > 0);
-    const rest = CATEGORIES.filter((c) => !used.has(c.id));
-    if (rest.length > 0) grouped.push({ id: "more", label: "More", arabic: "", categories: rest });
-    return grouped;
-  }, [catSort, sortedCategories]);
+    return liveSections;
+  }, [catSort, sortedCategories, liveSections]);
 
   const activeSub = useMemo(() => {
-    for (const cat of CATEGORIES) {
+    for (const cat of liveCats) {
       const found = cat.subcategories.find((s) => s.id === activeSubId);
       if (found) return found;
     }
-    return CATEGORIES[0]!.subcategories[0]!;
-  }, [activeSubId]);
+    return liveCats[0]?.subcategories[0] ?? CATEGORIES[0]!.subcategories[0]!;
+  }, [activeSubId, liveCats]);
 
-  const allItems = useMemo(() => {
-    const list: FoodItem[] = [];
-    for (const cat of CATEGORIES) {
-      for (const sub of cat.subcategories) {
-        list.push(...sub.items);
-      }
-    }
-    return list;
-  }, []);
+  const allItems = liveAllItems;
 
   const dq = dishQuery.trim().toLowerCase();
   const searching = dq.length > 0;
@@ -146,7 +143,8 @@ export default function FoodSelectUI() {
   }
 
   function selectCategory(id: string) {
-    const cat = CATEGORIES.find((c) => c.id === id)!;
+    const cat = liveCats.find((c) => c.id === id)!;
+    if (!cat) return;
     const nextOpen = openCategoryId === id ? "" : id;
     setOpenCategoryId(nextOpen);
     if (nextOpen) setActiveSubId(cat.subcategories[0]!.id);
@@ -155,6 +153,11 @@ export default function FoodSelectUI() {
 
   return (
     <div className="fs-root">
+      {catalogLoading && (
+        <div className="pointer-events-none fixed right-4 top-4 z-50 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur-sm">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading menu…
+        </div>
+      )}
       {/* Food photo (sits behind everything else, full-bleed on mobile) */}
       <div className="fs-food-hero">
         <div className="fs-food-glow" />

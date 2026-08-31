@@ -48,6 +48,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const foodById = useMemo(() => {
     const map = new Map<string, FoodItem>();
+    // Seed with static data so cart lines always resolve even before the live
+    // catalog loads. Live items registered via registerFood() take precedence.
     for (const cat of CATEGORIES) {
       for (const sub of cat.subcategories) {
         for (const item of sub.items) map.set(item.id, item);
