@@ -45,6 +45,14 @@ USER/DELIVERY.
   orders (guest checkout, server-side price snapshots incl. supplement
   prices, sale/payment combo validation, GET /mine, GET /assigned, admin
   status/assign endpoints).
+- **Dish editor** (!6): admin.menu.tsx rebuilt API-driven — Division →
+  Category → CATEGORY_INGREDIENT-scoped ingredient panel; attachments
+  reference shared ingredient ids with is_ingredient/is_removable/
+  is_supplementaire + price_supplementaire; quick-add writes ingredient +
+  category eligibility before attaching; category change mid-edit flags
+  ineligible attachments ("Allow in category" or remove; save blocked);
+  save requires name + division/category + price; product cards live-PATCH
+  price/availability and DELETE via the API.
 
 ## Manual steps (project owner, not agent)
 
@@ -55,27 +63,6 @@ USER/DELIVERY.
    `UPDATE users SET role='OWNER' WHERE email='...';` (same for SUPER_ADMIN).
 
 ## REMAINING WORK
-
-### 2. Dish create/edit flow in `src/admin/routes/admin.menu.tsx` — the most important fix
-
-Replace the flat `Burgers/Sides/Drinks/Desserts` dropdown and the global
-`ingredientLibrary` panel (name-copied objects, no shared record) with one
-connected picker backed by the API. Exact sequence:
-1. Pick a **Division** first.
-2. Division filters the **Category** dropdown (incl. subcategories via
-   self-parent). Category required before anything else.
-3. Ingredient panel populates from **CATEGORY_INGREDIENT** only — other
-   categories' ingredients must not appear.
-4. Attaching an ingredient creates a **PRODUCT_INGREDIENT** row (shared
-   ingredient id, never a name copy) with flags: is_ingredient,
-   is_removable, is_supplementaire + price_supplementaire.
-5. No freehand new ingredients on a dish: either add to the category's
-   eligible list first, or a "quick add to this category" action that
-   writes category_ingredient before attaching.
-6. Changing category mid-edit re-filters the panel and flags now-ineligible
-   attached ingredients (remove or add to new category's list).
-7. Save blocked until name + resolved division/category + price. Ingredients
-   optional but must trace the category-scoped path.
 
 ### 3. `src/admin/routes/admin.offers.tsx` rework (DB model is ready)
 
