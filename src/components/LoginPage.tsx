@@ -1,20 +1,38 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Beef, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 import "./LoginPage.css";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: wire up authentication
-    console.log({ email, password, remember });
-    navigate("/dashboard");
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const user = await login(email, password);
+      const from = (location.state as { from?: string } | null)?.from;
+      if (user.role === "OWNER" || user.role === "SUPER_ADMIN") {
+        navigate("/admin");
+      } else {
+        navigate(from ?? "/dashboard");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -76,7 +94,7 @@ export default function LoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
                     autoComplete="current-password"
                   />
                   <button
@@ -102,7 +120,7 @@ export default function LoginPage() {
                   aria-pressed={remember}
                 >
                   <span className={remember ? "lp-check lp-check--on" : "lp-check"}>
-                    {remember ? "✓" : ""}
+                    {remember ? "\u2713" : ""}
                   </span>
                   Remember me
                 </button>
@@ -111,8 +129,17 @@ export default function LoginPage() {
                 </a>
               </div>
 
-              <button type="submit" className="lp-btn lp-btn--primary">
-                Sign in
+              {error ? (
+                <p
+                  role="alert"
+                  style={{ color: "#c0392b", fontSize: "0.85rem", fontWeight: 600, margin: 0 }}
+                >
+                  {error}
+                </p>
+              ) : null}
+
+              <button type="submit" className="lp-btn lp-btn--primary" disabled={submitting}>
+                {submitting ? "Signing in\u2026" : "Sign in"}
                 <ArrowRight className="lp-arrow" size={16} strokeWidth={2.4} />
               </button>
 
