@@ -58,6 +58,11 @@ USER/DELIVERY.
   {id_product, quantity} items via /api/offers; explicit
   applies_to_whole_menu toggle replaces the "Whole menu" magic string;
   pause/activate/delete hit the API.
+- **Admin wiring** (!8/!9): users API (GET /api/users with order stats,
+  PATCH is_active/name/phone, DELETE with self/protected-role guards);
+  shell Sign out calls logout(); admin.tsx drives role/person from
+  AuthContext with Users nav gated to Super Admin; /admin/users behind
+  RequireRole(SUPER_ADMIN); admin.users.tsx rebuilt on /api/users.
 
 ## Manual steps (project owner, not agent)
 
@@ -69,19 +74,14 @@ USER/DELIVERY.
 
 ## REMAINING WORK
 
-### 4. Wire admin to real data (IN PROGRESS — branch fable5-admin-wiring, MR !8)
+### 4b. Customer-facing offers section on the landing page (requested)
 
-Done on the branch: users management API — GET /api/users (with
-orders_count + total_spent aggregates), PATCH name/phone/is_active
-(Owner/Super Admin only modifiable by themselves), DELETE (blocks self and
-protected roles, 409 on FK refs); mounted at /api/users.
-Still to do in this MR:
-- shell.tsx "Sign out" link must call logout() (currently just a Link to /)
-- admin.tsx: drive role/person from AuthContext; gate nav by role — Users
-  section is Super Admin only per the brief (Owner: Overview/Menu/Offers)
-- App.tsx: nest RequireRole(["SUPER_ADMIN"]) around /admin/users
-- admin.users.tsx: rewrite off the appUsers mock onto /api/users
-  (ban = is_active toggle; drop age/gender mock analytics)
+The navbar already links to #offers (with a badge) but no such section
+exists. Build a landing-page Offers section that lists ACTIVE offers from
+GET /api/offers (title, type, price/discount, availability window, item
+thumbnails + quantities / "Whole menu") and lets the visitor order from it
+(add the offer's items to the cart via CartContext).
+
 Note: admin.index.tsx analytics stays mock for now — no analytics
 endpoints exist yet; flag as follow-up.
 
