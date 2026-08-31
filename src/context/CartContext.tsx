@@ -8,6 +8,7 @@ interface CartContextType {
   pending: Record<string, PendingUnit[]>;
   favorites: string[];
   foodById: Map<string, FoodItem>;
+  registerFood: (food: FoodItem) => void;
   committedByFood: Record<string, number>;
   cartCount: number;
   cartTotal: number;
@@ -43,6 +44,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [editBackups, setEditBackups] = useState<Record<string, CartLine[]>>({});
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [extraFoods, setExtraFoods] = useState<Record<string, FoodItem>>({});
 
   const foodById = useMemo(() => {
     const map = new Map<string, FoodItem>();
@@ -51,8 +53,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         for (const item of sub.items) map.set(item.id, item);
       }
     }
+    for (const food of Object.values(extraFoods)) map.set(food.id, food);
     return map;
-  }, []);
+  }, [extraFoods]);
+
+  /** Register a runtime food (e.g. an offer pack) so cart lines can resolve it. */
+  function registerFood(food: FoodItem) {
+    setExtraFoods((prev) => (prev[food.id] ? prev : { ...prev, [food.id]: food }));
+  }
 
   /** How many units of each food are already committed (in cart lines). */
   const committedByFood = useMemo(() => {
@@ -278,6 +286,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         pending,
         favorites,
         foodById,
+        registerFood,
         committedByFood,
         cartCount,
         cartTotal,
