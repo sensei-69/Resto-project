@@ -69,13 +69,21 @@ USER/DELIVERY.
 
 ## REMAINING WORK
 
-### 4. Wire admin to real data
+### 4. Wire admin to real data (IN PROGRESS — branch fable5-admin-wiring, MR !8)
 
-`dashboard-data.ts` is all mock. Menu, offers, users pages should consume
-the API. Admin shell (`admin.tsx`) hardcodes role="Owner"/person — drive
-from AuthContext; gate nav sections by role inside the one /admin shell
-(Owner: Menu/Offers/Orders/Analytics; Super Admin: + platform settings).
-Shell's "Sign out" link must call logout().
+Done on the branch: users management API — GET /api/users (with
+orders_count + total_spent aggregates), PATCH name/phone/is_active
+(Owner/Super Admin only modifiable by themselves), DELETE (blocks self and
+protected roles, 409 on FK refs); mounted at /api/users.
+Still to do in this MR:
+- shell.tsx "Sign out" link must call logout() (currently just a Link to /)
+- admin.tsx: drive role/person from AuthContext; gate nav by role — Users
+  section is Super Admin only per the brief (Owner: Overview/Menu/Offers)
+- App.tsx: nest RequireRole(["SUPER_ADMIN"]) around /admin/users
+- admin.users.tsx: rewrite off the appUsers mock onto /api/users
+  (ban = is_active toggle; drop age/gender mock analytics)
+Note: admin.index.tsx analytics stays mock for now — no analytics
+endpoints exist yet; flag as follow-up.
 
 ### 5. Missing pages (mock data exists unused: myOrders, deliveries, riderWeek, trendingFoods)
 
