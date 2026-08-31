@@ -37,6 +37,14 @@ USER/DELIVERY.
   via the API; landing Navbar is auth-gated — logged out: Login/Sign up
   dropdown; logged in: My Space (bell + avatar) with Balance, Language,
   Write a ticket (modal → POST /api/tickets), Settings, Sign out.
+- **Backend write endpoints** (!5): catalog CRUD (division/category/
+  ingredient/product; category division change cascades to subcategories;
+  product writes enforce CATEGORY_INGREDIENT eligibility in a transaction;
+  "quick add to this category" upsert; GET /products/:id returns ingredient
+  flags), offers CRUD ({id_product, quantity} items, applies_to_whole_menu),
+  orders (guest checkout, server-side price snapshots incl. supplement
+  prices, sale/payment combo validation, GET /mine, GET /assigned, admin
+  status/assign endpoints).
 
 ## Manual steps (project owner, not agent)
 
@@ -47,18 +55,6 @@ USER/DELIVERY.
    `UPDATE users SET role='OWNER' WHERE email='...';` (same for SUPER_ADMIN).
 
 ## REMAINING WORK
-
-### 1. Backend write endpoints (needed by everything below)
-
-Only read endpoints exist for the catalog. Add (OWNER/SUPER_ADMIN-guarded):
-- CRUD for division, category, ingredient, product (product create/update
-  must accept the product_ingredient rows with flags + price_supplementaire).
-- `POST /api/catalog/categories/:id/ingredients` — the "quick add to this
-  category" action (writes a category_ingredient row).
-- CRUD for offers with `items: [{ id_product, quantity }]` and
-  `applies_to_whole_menu`.
-- Orders endpoints (create order w/ items + ingredient actions, list by
-  customer, list/assign for delivery role, status transitions).
 
 ### 2. Dish create/edit flow in `src/admin/routes/admin.menu.tsx` — the most important fix
 
