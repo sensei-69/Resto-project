@@ -7,6 +7,7 @@ import catalogRoutes from "./routes/catalog.js";
 import offerRoutes from "./routes/offers.js";
 import orderRoutes from "./routes/orders.js";
 import userRoutes from "./routes/users.js";
+import analyticsRoutes from "./routes/analytics.js";
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use("/api/catalog", catalogRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 

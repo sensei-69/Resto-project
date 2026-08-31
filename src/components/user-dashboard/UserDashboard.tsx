@@ -4,6 +4,8 @@ import {
   LayoutDashboard,
   MessageSquare,
   PackageCheck,
+  ShoppingBag,
+  TicketCheck,
   Trophy,
   UtensilsCrossed,
   Wallet,
@@ -16,14 +18,18 @@ import {
   StatCard,
   type NavItem,
 } from "../../admin/components/dashboard/shell";
+import { useAuth } from "../../context/AuthContext";
 import { COUPON_TIERS, USER_NAME, userFeedbacks, userOrders } from "./data";
 
 const nav: NavItem[] = [
   { to: "/dashboard", label: "My space", icon: LayoutDashboard, exact: true },
+  { to: "/my-orders", label: "My orders", icon: ShoppingBag, exact: true },
+  { to: "/tickets", label: "My tickets", icon: TicketCheck, exact: true },
   { to: "/menu", label: "Order food", icon: UtensilsCrossed },
 ];
 
 export default function UserDashboard() {
+  const { user } = useAuth();
   const [revealed, setRevealed] = useState(false);
 
   const stats = useMemo(() => {
@@ -52,7 +58,7 @@ export default function UserDashboard() {
   const progressToReward = Math.min(100, Math.round((stats.totalSpent / entryTier.min) * 100));
 
   return (
-    <DashboardShell role="Customer" person={USER_NAME} nav={nav}>
+    <DashboardShell role="Customer" person={user?.name ?? USER_NAME} nav={nav}>
       <PageHeader
         eyebrow="My account"
         title={`Welcome back, ${USER_NAME.split(" ")[0]}`}
