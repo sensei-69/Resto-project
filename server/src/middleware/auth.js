@@ -14,6 +14,21 @@ export function requireAuth(req, res, next) {
   }
 }
 
+/** Attaches req.user when a valid token is present, but never rejects (guest checkout). */
+export function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (token) {
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = { id: Number(payload.sub), role: payload.role };
+    } catch {
+      // invalid token on an optional route: treat as guest
+    }
+  }
+  return next();
+}
+
 export function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: "Unauthenticated" });
