@@ -1,6 +1,7 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Flame, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { useAuth } from "../../../context/AuthContext";
 
 export type NavItem = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
@@ -15,6 +16,8 @@ export function DashboardShell({
   nav: NavItem[];
   children: ReactNode;
 }) {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   return (
     <div className="min-h-screen bg-cream-2 text-ink">
       <div className="flex w-full flex-col lg:flex-row">
@@ -60,12 +63,16 @@ export function DashboardShell({
               Signed in
             </p>
             <p className="mt-1 text-sm font-semibold text-cream-1">{person}</p>
-            <Link
-              to="/"
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                navigate("/");
+              }}
               className="mt-3 inline-block text-[10px] font-bold uppercase tracking-[0.18em] text-brand-light hover:text-cream-1"
             >
               Sign out
-            </Link>
+            </button>
           </div>
         </aside>
 
