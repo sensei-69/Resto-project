@@ -37,7 +37,9 @@ export default function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="menu" element={<AdminMenu />} />
-                <Route path="users" element={<AdminUsers />} />
+                <Route element={<RequireRole roles={["SUPER_ADMIN"]} />}>
+                  <Route path="users" element={<AdminUsers />} />
+                </Route>
                 <Route path="offers" element={<AdminOffers />} />
               </Route>
             </Route>
