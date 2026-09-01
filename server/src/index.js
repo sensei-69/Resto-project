@@ -12,7 +12,9 @@ import analyticsRoutes from "./routes/analytics.js";
 const app = express();
 
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? "http://localhost:5173" }));
-app.use(express.json());
+// Dish images are sent as base64 data URLs; the 100kb default rejects them
+// with "request entity too large".
+app.use(express.json({ limit: "15mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

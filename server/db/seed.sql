@@ -3,6 +3,10 @@
 
 BEGIN;
 
+-- The Arabic labels below must be read as UTF-8 even when the client's OS
+-- default encoding differs (prevents garbled name_ar values).
+SET LOCAL client_encoding = 'UTF8';
+
 INSERT INTO method_of_sale (code, name, description) VALUES
   ('DINE_IN',   'Dine in',   'Eat at the restaurant'),
   ('TAKE_AWAY', 'Take away', 'Pick up at the counter'),
@@ -39,5 +43,17 @@ FROM (VALUES
   ('Desserts',   'حلويات',        5)
 ) AS v(name, name_ar, sort_order)
 WHERE NOT EXISTS (SELECT 1 FROM division d WHERE d.name = v.name);
+
+-- Repair Arabic labels garbled by a previous seed run with a non-UTF8 client.
+UPDATE division AS d
+SET name_ar = v.name_ar
+FROM (VALUES
+  ('Starters',   'مقبلات'),
+  ('Mains',      'أطباق رئيسية'),
+  ('Sandwiches', 'سندويش'),
+  ('Drinks',     'مشروبات'),
+  ('Desserts',   'حلويات')
+) AS v(name, name_ar)
+WHERE d.name = v.name AND d.name_ar IS DISTINCT FROM v.name_ar;
 
 COMMIT;

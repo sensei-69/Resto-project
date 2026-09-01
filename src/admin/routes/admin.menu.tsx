@@ -345,7 +345,9 @@ function DishDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const initialCategory = product ? categories.find((c) => c.id === product.id_category) : undefined;
+  const initialCategory = product
+    ? categories.find((c) => Number(c.id) === Number(product.id_category))
+    : undefined;
 
   const [name, setName] = useState(product?.name ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
@@ -354,7 +356,9 @@ function DishDialog({
   // Step 1: Division first \u2014 nothing else resolves without it.
   const [divisionId, setDivisionId] = useState<number | "">(initialCategory?.id_division ?? "");
   // Step 2: Category, filtered down to the chosen division.
-  const [categoryId, setCategoryId] = useState<number | "">(product?.id_category ?? "");
+  const [categoryId, setCategoryId] = useState<number | "">(
+    product ? Number(product.id_category) : "",
+  );
   const [eligible, setEligible] = useState<EligibleIngredient[]>([]);
   const [attached, setAttached] = useState<AttachedIngredient[]>([]);
   const [loadingIngredients, setLoadingIngredients] = useState(false);
@@ -364,7 +368,7 @@ function DishDialog({
   const [quickBusy, setQuickBusy] = useState(false);
 
   const divisionCategories = useMemo(
-    () => categories.filter((c) => c.id_division === divisionId),
+    () => categories.filter((c) => Number(c.id_division) === Number(divisionId)),
     [categories, divisionId],
   );
 
@@ -410,9 +414,11 @@ function DishDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const eligibleIds = useMemo(() => new Set(eligible.map((e) => e.id)), [eligible]);
+  const eligibleIds = useMemo(() => new Set(eligible.map((e) => Number(e.id))), [eligible]);
   // Category changed mid-edit: flag attachments no longer eligible (step 6).
-  const ineligible = categoryId ? attached.filter((a) => !eligibleIds.has(a.id_ingredient)) : [];
+  const ineligible = categoryId
+    ? attached.filter((a) => !eligibleIds.has(Number(a.id_ingredient)))
+    : [];
 
   const pickDivision = (value: number | "") => {
     setDivisionId(value);
@@ -677,7 +683,7 @@ function DishDialog({
               ) : null}
               <ul className="mt-2 grid gap-1.5">
                 {attached.map((a) => {
-                  const bad = categoryId !== "" && !eligibleIds.has(a.id_ingredient);
+                  const bad = categoryId !== "" && !eligibleIds.has(Number(a.id_ingredient));
                   return (
                     <li
                       key={a.id_ingredient}
