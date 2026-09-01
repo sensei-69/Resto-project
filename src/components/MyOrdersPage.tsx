@@ -15,17 +15,12 @@ import {
   Panel,
   Pill,
   StatCard,
-  type NavItem,
 } from "../admin/components/dashboard/shell";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, UtensilsCrossed } from "lucide-react";
+import { USER_NAV } from "./user-nav";
 
-const nav: NavItem[] = [
-  { to: "/dashboard", label: "My space", icon: LayoutDashboard, exact: true },
-  { to: "/my-orders", label: "My orders", icon: ShoppingBag, exact: true },
-  { to: "/menu", label: "Order food", icon: UtensilsCrossed },
-];
+const nav = USER_NAV;
 
 type OrderItem = {
   id_product: number;

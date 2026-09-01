@@ -39,6 +39,8 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<AuthUser>;
   register: (input: RegisterInput) => Promise<AuthUser>;
   logout: () => void;
+  /** Replace the in-memory user after a profile update. */
+  updateUser: (user: AuthUser) => void;
 };
 
 const TOKEN_KEY = "eb_token";

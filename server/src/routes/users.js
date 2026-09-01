@@ -27,6 +27,24 @@ router.get("/", ...adminOnly, async (_req, res, next) => {
   }
 });
 
+// Signed-in users can update their own profile (name, phone, avatar, language).
+// Declared before the "/:id" routes so "me" is not parsed as an id.
+router.patch("/me", requireAuth, async (req, res, next) => {
+  try {
+    const q = buildUpdate("users", req.user.id, req.body ?? {}, [
+      "name", "phone", "avatar_url", "preferred_language",
+    ]);
+    if (!q) return res.status(400).json({ error: "No updatable fields provided" });
+    const { rows } = await query(q.text, q.values);
+    if (!rows[0]) return res.status(404).json({ error: "User not found" });
+    const user = rows[0];
+    delete user.password_hash;
+    return res.json({ user });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 async function loadTarget(id) {
   const { rows } = await query("SELECT id, role FROM users WHERE id = $1", [id]);
   return rows[0] ?? null;
