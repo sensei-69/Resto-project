@@ -11,8 +11,10 @@ interface Props {
 }
 
 function lineTotal(line: CartLine, food: FoodItem) {
+  // (item price * item qty) + sum(add-on price * add-on qty): add-ons carry
+  // their own quantity and are not multiplied by the item quantity.
   const extras = food.addOns.reduce((sum, a) => sum + a.price * (line.addOns[a.id] ?? 0), 0);
-  return (food.price + extras) * line.qty;
+  return food.price * line.qty + extras;
 }
 
 export function OrderCart({ lines, foodById, onQty, onRemove, onAddOnQty, onClear }: Props) {

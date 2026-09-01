@@ -274,11 +274,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   const cartCount = lines.reduce((s, l) => s + l.qty, 0);
+  // (item price * item qty) + sum(add-on price * add-on qty) per line.
   const cartTotal = lines.reduce((sum, l) => {
     const food = foodById.get(l.foodId);
     if (!food) return sum;
     const extras = food.addOns.reduce((s, a) => s + a.price * (l.addOns[a.id] ?? 0), 0);
-    return sum + (food.price + extras) * l.qty;
+    return sum + food.price * l.qty + extras;
   }, 0);
 
   return (
