@@ -99,11 +99,10 @@ export default function TicketsPage() {
   const inProgress = tickets.filter((t) => t.status === "IN_PROGRESS").length;
   const closed = tickets.filter((t) => t.status === "CLOSED").length;
 
+  // Admins keep the customer options and get an extra Admin panel link,
+  // instead of the whole sidebar switching to the admin nav.
   const nav = isAdmin
-    ? [
-        { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
-        { to: "/tickets", label: "Tickets", icon: TicketCheck, exact: true },
-      ]
+    ? [...userNav, { to: "/admin", label: "Admin panel", icon: LayoutDashboard, exact: true }]
     : userNav;
 
   return (

@@ -18,8 +18,10 @@ import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import "./navbar-auth.css";
 
-const links = [
-  { label: "Offers", href: "#offers", badge: 3 },
+type NavLinkItem = { label: string; href: string; badge?: number };
+
+const links: NavLinkItem[] = [
+  { label: "Offers", href: "#offers" },
   { label: "About us", href: "#about" },
   { label: "Location", href: "#location" },
   { label: "Contact", href: "#contact" },
@@ -30,6 +32,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [acctOpen, setAcctOpen] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [offerCount, setOfferCount] = useState(0);
   const acctRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const { cartCount, setIsCartOpen } = useCart();
@@ -48,6 +51,25 @@ export function Navbar() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // The Offers badge shows the live number of active offers.
+  useEffect(() => {
+    let cancelled = false;
+    api<{ offers: { is_active: boolean }[] }>("/api/offers")
+      .then(({ offers }) => {
+        if (!cancelled) setOfferCount(offers.filter((o) => o.is_active).length);
+      })
+      .catch(() => {
+        if (!cancelled) setOfferCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const navLinks = links.map((l) =>
+    l.label === "Offers" ? { ...l, badge: offerCount > 0 ? offerCount : undefined } : l,
+  );
 
   // Close the account dropdown on outside click.
   useEffect(() => {
@@ -95,26 +117,36 @@ export function Navbar() {
   return (
     <header className={`lp-navbar ${scrolled ? "lp-navbar--scrolled" : ""}`}>
       <nav className="lp-nav-container">
-        {/* Brand Name \u2014 left */}
+        {/* Brand Name - left */}
         <a href="#top" className="lp-brand">
           Resto<span className="lp-brand-accent">Venezia</span>
         </a>
 
-        {/* Brand Logo \u2014 middle */}
+        {/* Brand Logo - middle */}
         <a href="#top" aria-label="Resto Venezia home" className="lp-logo-link">
           <span className="lp-logo-badge">
             <Utensils className="lp-logo-icon" />
           </span>
         </a>
 
-        {/* Links & Actions \u2014 right */}
+        {/* Links & Actions - right */}
         <div className="lp-nav-right lp-desktop-only">
-          {links.map((l) => (
+          {navLinks.map((l) => (
             <a key={l.label} href={l.href} className="lp-nav-link">
               <span>{l.label}</span>
               {l.badge ? <span className="lp-nav-badge">{l.badge}</span> : null}
             </a>
           ))}
+
+          {user ? (
+            <button
+              type="button"
+              className="lp-myspace-btn"
+              onClick={() => navigate("/dashboard")}
+            >
+              My Space
+            </button>
+          ) : null}
 
           {cartCount > 0 && (
             <button
@@ -131,7 +163,6 @@ export function Navbar() {
 
           {user ? (
             <div className="lp-myspace" ref={acctRef}>
-              <span className="lp-myspace-label">My Space</span>
               <button type="button" aria-label="Notifications" className="lp-profile-btn">
                 <Bell className="lp-profile-icon" />
               </button>
@@ -176,7 +207,7 @@ export function Navbar() {
                     className="lp-acct-item"
                     onClick={() => {
                       setAcctOpen(false);
-                      navigate("/dashboard");
+                      navigate("/profile");
                     }}
                   >
                     <Settings size={16} /> Settings
@@ -224,7 +255,7 @@ export function Navbar() {
       {/* Mobile Dropdown */}
       <div className={`lp-mobile-dropdown ${mobileMenuOpen ? "lp-mobile-dropdown--open" : ""}`}>
         <div className="lp-mobile-dropdown-inner">
-          {links.map((l) => (
+          {navLinks.map((l) => (
             <a
               key={l.label}
               href={l.href}
@@ -297,7 +328,7 @@ export function Navbar() {
             <h3 className="lp-modal-title">Write a ticket</h3>
             {sent ? (
               <>
-                <p className="lp-modal-ok">Ticket sent \u2014 we'll get back to you soon.</p>
+                <p className="lp-modal-ok">Ticket sent - we'll get back to you soon.</p>
                 <div className="lp-modal-actions">
                   <button type="button" className="lp-modal-btn lp-modal-btn--primary" onClick={closeTicket}>
                     Close

@@ -36,6 +36,7 @@ export default function App() {
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/my-orders" element={<MyOrdersPage />} />
               <Route path="/tickets" element={<TicketsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Route>
 
             {/* Delivery riders */}
