@@ -37,6 +37,7 @@ export default function FoodSelectUI() {
     pending,
     favorites,
     foodById,
+    registerFood,
     committedByFood,
     cartCount,
     cartTotal,
@@ -70,10 +71,20 @@ export default function FoodSelectUI() {
       setActiveSubId(first.subcategories[0]?.id ?? "");
     }
   }, [catalogLoading, liveCats]);
+
+  // Register live catalog items so cart lines resolve their dish (name, price,
+  // image) \u2014 without this, DB products never show up in the cart drawer.
+  useEffect(() => {
+    liveAllItems.forEach(registerFood);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveAllItems]);
+
   const [dishQuery, setDishQuery] = useState("");
   const [catSort, setCatSort] = useState<CategorySortKey>("universal");
   const [luckySeed, setLuckySeed] = useState(0);
   const [personaliseId, setPersonaliseId] = useState<string | null>(null);
+  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
+  const [showFavorites, setShowFavorites] = useState(false);
 
   // On mount, if there's a dish we should auto-open (e.g. from landing page)
   const didAutoSelect = useRef(false);
@@ -130,12 +141,15 @@ export default function FoodSelectUI() {
   const searching = dq.length > 0;
   const visibleItems = searching
     ? allItems.filter((f) => f.name.toLowerCase().includes(dq))
-    : activeSub.items;
+    : showFavorites
+      ? allItems.filter((f) => favorites.includes(f.id))
+      : activeSub.items;
 
   const heroImage = useMemo(() => {
+    if (selectedFood?.image) return selectedFood.image;
     const last = lines[lines.length - 1];
     return (last && foodById.get(last.foodId)?.image) ?? activeSub.items[0]?.image;
-  }, [lines, foodById, activeSub]);
+  }, [selectedFood, lines, foodById, activeSub]);
 
   function changeCatSort(next: CategorySortKey) {
     setCatSort(next);
@@ -143,11 +157,33 @@ export default function FoodSelectUI() {
   }
 
   function selectCategory(id: string) {
-    const cat = liveCats.find((c) => c.id === id)!;
+    const cat = liveCats.find((c) => c.id === id);
     if (!cat) return;
+    setDishQuery("");
+    setShowFavorites(false);
     const nextOpen = openCategoryId === id ? "" : id;
     setOpenCategoryId(nextOpen);
     if (nextOpen) setActiveSubId(cat.subcategories[0]!.id);
+  }
+
+  function selectSub(id: string) {
+    setDishQuery("");
+    setShowFavorites(false);
+    setActiveSubId(id);
+  }
+
+  /** Jump to the category/subcategory that owns a dish (used to exit search). */
+  function jumpToFood(food: FoodItem) {
+    for (const cat of liveCats) {
+      const sub = cat.subcategories.find((s) => s.items.some((i) => i.id === food.id));
+      if (sub) {
+        setOpenCategoryId(cat.id);
+        setActiveSubId(sub.id);
+        break;
+      }
+    }
+    setDishQuery("");
+    setShowFavorites(false);
   }
 
 
@@ -173,8 +209,21 @@ export default function FoodSelectUI() {
           <h1 className="fs-title">Menu</h1>
         </div>
         <div className="fs-topbar-right">
-          <button className="fs-icon-btn" aria-label="Favorites">
-            <Heart className="fs-icon-svg" strokeWidth={1.75} />
+          <button
+            className="fs-icon-btn"
+            aria-label="Favorites"
+            aria-pressed={showFavorites}
+            onClick={() => {
+              setShowFavorites((v) => !v);
+              setDishQuery("");
+            }}
+          >
+            <Heart
+              className="fs-icon-svg"
+              strokeWidth={1.75}
+              fill={showFavorites ? "currentColor" : "none"}
+            />
+            {favorites.length > 0 && <span className="fs-icon-badge">{favorites.length}</span>}
           </button>
           {cartCount > 0 && (
             <button
@@ -236,13 +285,13 @@ export default function FoodSelectUI() {
             activeSubId={activeSubId}
             query={dishQuery}
             onSelectCategory={selectCategory}
-            onSelectSub={setActiveSubId}
+            onSelectSub={selectSub}
           />
         </div>
 
         {/* Middle: dishes of the selected subcategory */}
         <FoodGrid
-          subName={activeSub.name}
+          subName={showFavorites ? "Favorites" : activeSub.name}
           items={visibleItems}
           searching={searching}
           dishQuery={dishQuery}
@@ -251,9 +300,17 @@ export default function FoodSelectUI() {
           favorites={favorites}
           openDropId={personaliseId}
           onToggleFavorite={toggleFavorite}
-          onDishClick={(food) => addToCartDirect(food)}
-          onAddPendingUnit={dishClick}
+          onDishClick={(food) => {
+            addToCartDirect(food);
+            setSelectedFood(food);
+            if (searching || showFavorites) jumpToFood(food);
+          }}
+          onAddPendingUnit={(food) => {
+            dishClick(food);
+            setSelectedFood(food);
+          }}
           onPersonalise={(food) => {
+            setSelectedFood(food);
             // Selections are saved live; reopening pulls the saved units back for editing.
             if ((pending[food.id]?.length ?? 0) === 0) editFood(food);
             setPersonaliseId((cur) => (cur === food.id ? null : food.id));
