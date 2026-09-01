@@ -17,14 +17,10 @@ import {
 } from "../admin/components/dashboard/shell";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
+import { USER_NAV } from "./user-nav";
 
-const userNav: NavItem[] = [
-  { to: "/dashboard", label: "My space", icon: LayoutDashboard, exact: true },
-  { to: "/my-orders", label: "My orders", icon: ShoppingBag, exact: true },
-  { to: "/tickets", label: "My tickets", icon: TicketCheck, exact: true },
-  { to: "/menu", label: "Order food", icon: UtensilsCrossed },
-];
+const userNav: NavItem[] = USER_NAV;
 
 type Ticket = {
   id: number;
@@ -103,11 +99,10 @@ export default function TicketsPage() {
   const inProgress = tickets.filter((t) => t.status === "IN_PROGRESS").length;
   const closed = tickets.filter((t) => t.status === "CLOSED").length;
 
+  // Admins keep the customer options and get an extra Admin panel link,
+  // instead of the whole sidebar switching to the admin nav.
   const nav = isAdmin
-    ? [
-        { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
-        { to: "/tickets", label: "Tickets", icon: TicketCheck, exact: true },
-      ]
+    ? [...userNav, { to: "/admin", label: "Admin panel", icon: LayoutDashboard, exact: true }]
     : userNav;
 
   return (

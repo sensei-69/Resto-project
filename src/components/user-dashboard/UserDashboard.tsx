@@ -1,13 +1,9 @@
 import { useMemo, useState } from "react";
 import {
   Gift,
-  LayoutDashboard,
   MessageSquare,
   PackageCheck,
-  ShoppingBag,
-  TicketCheck,
   Trophy,
-  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import {
@@ -16,17 +12,12 @@ import {
   Panel,
   Pill,
   StatCard,
-  type NavItem,
 } from "../../admin/components/dashboard/shell";
 import { useAuth } from "../../context/AuthContext";
+import { USER_NAV } from "../user-nav";
 import { COUPON_TIERS, USER_NAME, userFeedbacks, userOrders } from "./data";
 
-const nav: NavItem[] = [
-  { to: "/dashboard", label: "My space", icon: LayoutDashboard, exact: true },
-  { to: "/my-orders", label: "My orders", icon: ShoppingBag, exact: true },
-  { to: "/tickets", label: "My tickets", icon: TicketCheck, exact: true },
-  { to: "/menu", label: "Order food", icon: UtensilsCrossed },
-];
+const nav = USER_NAV;
 
 export default function UserDashboard() {
   const { user } = useAuth();

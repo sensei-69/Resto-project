@@ -8,6 +8,7 @@ import LoginPage from "./components/LoginPage";
 import RegisterPage from "./components/register/RegisterPage";
 import UserDashboard from "./components/user-dashboard/UserDashboard";
 import MyOrdersPage from "./components/MyOrdersPage";
+import ProfilePage from "./components/ProfilePage";
 import DeliveryDashboard from "./components/DeliveryDashboard";
 import TicketsPage from "./components/TicketsPage";
 import { GlobalCartDrawer } from "./components/GlobalCartDrawer";
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/my-orders" element={<MyOrdersPage />} />
               <Route path="/tickets" element={<TicketsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Route>
 
             {/* Delivery riders */}

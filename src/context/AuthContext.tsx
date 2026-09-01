@@ -39,6 +39,8 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<AuthUser>;
   register: (input: RegisterInput) => Promise<AuthUser>;
   logout: () => void;
+  /** Replace the in-memory user after a profile update. */
+  updateUser: (user: AuthUser) => void;
 };
 
 const TOKEN_KEY = "eb_token";
@@ -112,9 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((nextUser: AuthUser) => {
+    setUser(nextUser);
+  }, []);
+
   const value = useMemo(
-    () => ({ user, token, loading, login, register, logout }),
-    [user, token, loading, login, register, logout],
+    () => ({ user, token, loading, login, register, logout, updateUser }),
+    [user, token, loading, login, register, logout, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
