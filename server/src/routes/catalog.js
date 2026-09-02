@@ -243,7 +243,18 @@ router.delete("/categories/:id/ingredients/:ingredientId", ...adminOnly, async (
 
 router.get("/ingredients", async (_req, res, next) => {
   try {
-    const { rows } = await query("SELECT * FROM ingredient ORDER BY name");
+    // category_ids powers the associate/dissociate chips in the admin menu.
+    const { rows } = await query(
+      `SELECT i.*,
+              COALESCE(
+                json_agg(ci.id_category) FILTER (WHERE ci.id_category IS NOT NULL),
+                '[]'
+              ) AS category_ids
+       FROM ingredient i
+       LEFT JOIN category_ingredient ci ON ci.id_ingredient = i.id
+       GROUP BY i.id
+       ORDER BY i.name`,
+    );
     return res.json({ ingredients: rows });
   } catch (err) {
     return next(err);
