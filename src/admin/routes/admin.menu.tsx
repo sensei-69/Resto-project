@@ -5,6 +5,7 @@ import {
   Check,
   FolderTree,
   ImagePlus,
+  Layers,
   Loader2,
   Pencil,
   Plus,
@@ -57,6 +58,7 @@ type EligibleIngredient = {
 type AttachedIngredient = {
   id_ingredient: number;
   name: string;
+  image?: string | null;
   is_ingredient: boolean;
   is_supplementaire: boolean;
   is_removable: boolean;
@@ -75,6 +77,7 @@ type Product = {
 
 const FALLBACK_DISH = "https://placehold.co/400x300/A80D25/FFFFFF?text=Dish";
 const FALLBACK_THUMB = "https://placehold.co/200x200/D9C7A7/4A2E19?text=%C2%B7";
+const FALLBACK_CAT = "https://placehold.co/300x200/4A2E19/D9C7A7?text=Category";
 
 const money = (v: string | number) => Number(v).toFixed(2);
 
@@ -146,7 +149,7 @@ export default function AdminMenu() {
 
   return (
     <>
-      {/* One-line tri-tab switcher, at the very top */}
+      {/* Tab switcher */}
       <div className="login-fade mb-5 grid grid-cols-3 gap-2 rounded-2xl border border-border bg-cream-1 p-2 shadow-sm">
         {TABS.map((t) => {
           const active = tab === t.key;
@@ -356,6 +359,7 @@ function IngredientsTab({
                 </div>
               </div>
 
+              {/* Category chips */}
               <div className="mt-3 border-t border-dashed border-border pt-3">
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
                   Categories
@@ -366,6 +370,9 @@ function IngredientsTab({
                       key={c.id}
                       className="inline-flex items-center gap-1.5 rounded-full border border-border bg-cream-2 py-1 pl-2.5 pr-1.5 text-[11px] font-bold text-ink-secondary"
                     >
+                      {c.image ? (
+                        <img src={c.image} alt="" className="h-4 w-4 rounded-full object-cover" />
+                      ) : null}
                       {c.name}
                       <button
                         onClick={() => void dissociate(ing.id, Number(c.id))}
@@ -410,6 +417,7 @@ function IngredientsTab({
         <IngredientDialog
           mode={editing.mode}
           ingredient={editing.ingredient}
+          categories={categories}
           token={token}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -425,12 +433,14 @@ function IngredientsTab({
 function IngredientDialog({
   mode,
   ingredient,
+  categories,
   token,
   onClose,
   onSaved,
 }: {
   mode: "create" | "edit";
   ingredient: Ingredient | null;
+  categories: Category[];
   token: string | null;
   onClose: () => void;
   onSaved: () => void;
@@ -438,10 +448,20 @@ function IngredientDialog({
   const [name, setName] = useState(ingredient?.name ?? "");
   const [image, setImage] = useState<string | null>(ingredient?.image ?? null);
   const [available, setAvailable] = useState(ingredient?.is_available ?? true);
+  // For create mode: which categories to immediately associate
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>(
+    ingredient?.category_ids ?? [],
+  );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const canSave = Boolean(name.trim()) && !saving;
+
+  const toggleCategory = (id: number) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
 
   const save = async () => {
     if (!canSave) return;
@@ -449,8 +469,24 @@ function IngredientDialog({
     setErr(null);
     const body = { name: name.trim(), image, is_available: available };
     try {
+      let ingredientId: number;
       if (mode === "create") {
-        await api("/api/catalog/ingredients", { method: "POST", body, token });
+        const res = await api<{ ingredient: { id: number } }>("/api/catalog/ingredients", {
+          method: "POST",
+          body,
+          token,
+        });
+        ingredientId = res.ingredient.id;
+        // Associate to selected categories immediately
+        await Promise.all(
+          selectedCategoryIds.map((catId) =>
+            api(`/api/catalog/categories/${catId}/ingredients`, {
+              method: "POST",
+              body: { id_ingredient: ingredientId, is_ingredient: true, is_supplementaire: true },
+              token,
+            }),
+          ),
+        );
       } else if (ingredient) {
         await api(`/api/catalog/ingredients/${ingredient.id}`, { method: "PATCH", body, token });
       }
@@ -461,14 +497,19 @@ function IngredientDialog({
     }
   };
 
+  // Group categories: top-level (no parent) and sub-categories
+  const topLevel = categories.filter((c) => !c.id_category);
+  const subOf = (parentId: number) => categories.filter((c) => Number(c.id_category) === parentId);
+
   return (
     <DialogShell
       label={mode === "create" ? "New ingredient" : `Modify ${ingredient?.name ?? "ingredient"}`}
       onClose={onClose}
-      maxWidth="max-w-md"
+      maxWidth="max-w-lg"
     >
       {err ? <DialogError message={err} /> : null}
-      <div className="space-y-4 p-5">
+      <div className="space-y-5 p-5">
+        {/* Name + image */}
         <div className="flex items-center gap-4">
           <ImageUpload image={image} fallback={FALLBACK_THUMB} rounded onPick={setImage} />
           <div className="min-w-0 flex-1 space-y-2">
@@ -489,6 +530,77 @@ function IngredientDialog({
               Available in the kitchen
             </label>
           </div>
+        </div>
+
+        {/* Category association */}
+        <div>
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+            {mode === "create" ? "Associate to categories (optional)" : "Categories"}
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {topLevel.map((cat) => {
+              const subs = subOf(cat.id);
+              const selected = selectedCategoryIds.includes(cat.id);
+              return (
+                <div key={cat.id}>
+                  {/* Parent category card */}
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(cat.id)}
+                    className={`group relative w-full overflow-hidden rounded-xl border-2 transition-all ${
+                      selected
+                        ? "border-brand shadow-md"
+                        : "border-border hover:border-brand/40"
+                    }`}
+                  >
+                    <img
+                      src={cat.image ?? FALLBACK_CAT}
+                      alt={cat.name}
+                      className="h-16 w-full object-cover"
+                    />
+                    <div
+                      className={`absolute inset-0 flex items-end p-1.5 ${
+                        selected ? "bg-brand/50" : "bg-brown/40 group-hover:bg-brown/30"
+                      }`}
+                    >
+                      {selected && (
+                        <Check className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-cream-1" />
+                      )}
+                      <span className="w-full truncate text-center text-[10px] font-extrabold uppercase tracking-[0.1em] text-cream-1">
+                        {cat.name}
+                      </span>
+                    </div>
+                  </button>
+                  {/* Sub-categories */}
+                  {subs.length > 0 && (
+                    <div className="mt-1 space-y-1 pl-2">
+                      {subs.map((sub) => {
+                        const subSelected = selectedCategoryIds.includes(sub.id);
+                        return (
+                          <button
+                            key={sub.id}
+                            type="button"
+                            onClick={() => toggleCategory(sub.id)}
+                            className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-bold transition-all ${
+                              subSelected
+                                ? "border-brand bg-brand/10 text-brand"
+                                : "border-border bg-cream-2 text-ink-secondary hover:border-brand/40"
+                            }`}
+                          >
+                            {subSelected && <Check className="h-3 w-3 shrink-0" />}
+                            <span className="truncate">{sub.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {categories.length === 0 && (
+            <p className="text-[11px] text-ink-muted">No categories yet. Create one first.</p>
+          )}
         </div>
       </div>
       <DialogFooter
@@ -520,6 +632,7 @@ function CategoriesTab({
   onError: (message: string) => void;
 }) {
   const [editing, setEditing] = useState<{ mode: "create" | "edit"; category: Category | null } | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
 
   const divisionName = (id: number) =>
     divisions.find((d) => Number(d.id) === Number(id))?.name ?? "No division";
@@ -532,6 +645,7 @@ function CategoriesTab({
   const remove = async (id: number) => {
     try {
       await api(`/api/catalog/categories/${id}`, { method: "DELETE", token });
+      if (selected === id) setSelected(null);
       refresh();
     } catch (e) {
       fail(e, "Delete failed");
@@ -576,11 +690,24 @@ function CategoriesTab({
     }
   };
 
+  // Separate top-level and sub-categories
+  const topLevel = categories.filter((c) => !c.id_category);
+  const subOf = (parentId: number) =>
+    categories.filter((c) => Number(c.id_category) === parentId);
+
+  const selectedCat = selected !== null ? categories.find((c) => c.id === selected) ?? null : null;
+  const inCategory = selectedCat
+    ? ingredients.filter((i) => i.category_ids.includes(Number(selectedCat.id)))
+    : [];
+  const outOfCategory = selectedCat
+    ? ingredients.filter((i) => !i.category_ids.includes(Number(selectedCat.id)))
+    : [];
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted">
-          Every category lives in a division and carries its own eligible ingredients.
+          Click a category to manage its ingredients. Sub-categories appear below their parent.
         </p>
         <button
           className="login-cta !w-auto shrink-0 px-5"
@@ -592,94 +719,132 @@ function CategoriesTab({
         </button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {categories.map((c) => {
-          const inCategory = ingredients.filter((i) => i.category_ids.includes(Number(c.id)));
-          const outOfCategory = ingredients.filter((i) => !i.category_ids.includes(Number(c.id)));
-          const parent = parentName(c.id_category);
+      {/* ---- Big image grid of top-level categories ---- */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {topLevel.map((cat) => {
+          const subs = subOf(cat.id);
+          const isSelected = selected === cat.id;
           return (
-            <div
-              key={c.id}
-              className="rounded-2xl border border-border bg-cream-1 p-4 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <div className="flex items-start gap-3">
-                <img
-                  src={c.image ?? FALLBACK_THUMB}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded-xl border border-border object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-base font-extrabold text-ink">{c.name}</h3>
-                  <p className="mt-0.5 truncate text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
-                    {divisionName(c.id_division)}
-                    {parent ? ` / ${parent}` : ""}
-                  </p>
-                  <button onClick={() => void toggle(c)} className="mt-1" aria-pressed={c.is_available}>
-                    <Pill tone={c.is_available ? "success" : "brand"}>
-                      {c.is_available ? "Available" : "Hidden"}
+            <div key={cat.id}>
+              {/* Parent card — full div is clickable */}
+              <button
+                type="button"
+                onClick={() => setSelected(isSelected ? null : cat.id)}
+                className={`group relative w-full overflow-hidden rounded-2xl border-2 text-left transition-all focus:outline-none ${
+                  isSelected
+                    ? "border-brand shadow-lg ring-2 ring-brand/30"
+                    : "border-border hover:border-brand/50 hover:shadow-md"
+                }`}
+              >
+                {/* Big image */}
+                <div className="relative h-36 w-full">
+                  <img
+                    src={cat.image ?? FALLBACK_CAT}
+                    alt={cat.name}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-brown/80 via-brown/20 to-transparent" />
+                  {/* Availability badge */}
+                  <span className="absolute right-2 top-2">
+                    <Pill tone={cat.is_available ? "success" : "brand"}>
+                      {cat.is_available ? "On" : "Off"}
                     </Pill>
-                  </button>
-                </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <button
-                    onClick={() => setEditing({ mode: "edit", category: c })}
-                    aria-label={`Modify ${c.name}`}
-                    className={iconBtn}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => void remove(Number(c.id))}
-                    aria-label={`Delete ${c.name}`}
-                    className={iconBtn}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-3 border-t border-dashed border-border pt-3">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-                  Eligible ingredients
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {inCategory.map((i) => (
-                    <span
-                      key={i.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-cream-2 py-1 pl-2.5 pr-1.5 text-[11px] font-bold text-ink-secondary"
-                    >
-                      {i.name}
-                      <button
-                        onClick={() => void detachIngredient(Number(c.id), i.id)}
-                        aria-label={`Remove ${i.name} from ${c.name}`}
-                        className="rounded-full p-0.5 text-ink-muted hover:bg-brand/10 hover:text-brand"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                  </span>
+                  {/* Selected checkmark */}
+                  {isSelected && (
+                    <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-brand text-cream-1">
+                      <Check className="h-3.5 w-3.5" />
                     </span>
-                  ))}
-                  {inCategory.length === 0 ? (
-                    <span className="text-[11px] text-ink-muted">None yet.</span>
-                  ) : null}
-                  {outOfCategory.length > 0 ? (
-                    <select
-                      value=""
-                      onChange={(e) =>
-                        e.target.value && void attachIngredient(Number(c.id), Number(e.target.value))
-                      }
-                      aria-label={`Add an ingredient to ${c.name}`}
-                      className="cursor-pointer rounded-full border border-dashed border-brand/60 bg-transparent px-2 py-1 text-[11px] font-bold text-brand outline-none"
-                    >
-                      <option value="">+ Add ingredient...</option>
-                      {outOfCategory.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
+                  )}
+                  {/* Name at bottom */}
+                  <div className="absolute bottom-0 left-0 right-0 p-3">
+                    <p className="truncate text-sm font-extrabold text-cream-1">{cat.name}</p>
+                    <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-cream-1/70">
+                      {divisionName(cat.id_division)}
+                      {subs.length > 0 ? ` · ${subs.length} sub` : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
+                {/* Action row */}
+                <div className="flex items-center justify-between gap-1 bg-cream-1 px-3 py-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void toggle(cat); }}
+                    aria-label={`Toggle ${cat.name}`}
+                    className="text-[10px] font-bold text-ink-muted hover:text-brand"
+                  >
+                    {cat.is_available ? "Hide" : "Show"}
+                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditing({ mode: "edit", category: cat }); }}
+                      aria-label={`Edit ${cat.name}`}
+                      className={iconBtn}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void remove(cat.id); }}
+                      aria-label={`Delete ${cat.name}`}
+                      className={iconBtn}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              </button>
+
+              {/* Sub-categories row */}
+              {subs.length > 0 && (
+                <div className="mt-2 space-y-1.5 pl-3">
+                  {subs.map((sub) => {
+                    const subSelected = selected === sub.id;
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setSelected(subSelected ? null : sub.id)}
+                        className={`group flex w-full items-center gap-2.5 overflow-hidden rounded-xl border-2 text-left transition-all ${
+                          subSelected
+                            ? "border-brand shadow-md ring-1 ring-brand/20"
+                            : "border-border hover:border-brand/40 hover:shadow-sm"
+                        }`}
+                      >
+                        <img
+                          src={sub.image ?? FALLBACK_CAT}
+                          alt={sub.name}
+                          className="h-12 w-12 shrink-0 object-cover"
+                        />
+                        <div className="min-w-0 flex-1 py-1">
+                          <p className="flex items-center gap-1 truncate text-[11px] font-extrabold text-ink">
+                            <Layers className="h-3 w-3 shrink-0 text-ink-muted" />
+                            {sub.name}
+                          </p>
+                          <p className="truncate text-[10px] text-ink-muted">
+                            {divisionName(sub.id_division)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1 pr-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditing({ mode: "edit", category: sub }); }}
+                            aria-label={`Edit ${sub.name}`}
+                            className={iconBtn}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); void remove(sub.id); }}
+                            aria-label={`Delete ${sub.name}`}
+                            className={iconBtn}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -689,6 +854,88 @@ function CategoriesTab({
           </Panel>
         ) : null}
       </div>
+
+      {/* ---- Ingredient panel for selected category ---- */}
+      {selectedCat && (
+        <div className="mt-6 rounded-2xl border border-brand/30 bg-cream-1 p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <img
+                src={selectedCat.image ?? FALLBACK_CAT}
+                alt={selectedCat.name}
+                className="h-10 w-10 rounded-xl object-cover"
+              />
+              <div>
+                <h3 className="text-sm font-extrabold text-ink">{selectedCat.name}</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+                  {divisionName(selectedCat.id_division)}
+                  {parentName(selectedCat.id_category)
+                    ? ` / ${parentName(selectedCat.id_category)}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setSelected(null)} className="text-ink-muted hover:text-brand">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <p className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+            Eligible ingredients
+          </p>
+
+          {/* Ingredient image grid */}
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+            {inCategory.map((i) => (
+              <div key={i.id} className="group relative">
+                <div className="overflow-hidden rounded-xl border-2 border-success/40 bg-cream-2">
+                  <img
+                    src={i.image ?? FALLBACK_THUMB}
+                    alt={i.name}
+                    className="h-16 w-full object-cover"
+                  />
+                  <p className="truncate px-1 py-1 text-center text-[10px] font-bold text-ink">
+                    {i.name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => void detachIngredient(Number(selectedCat.id), i.id)}
+                  aria-label={`Remove ${i.name}`}
+                  className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-brand text-cream-1 shadow group-hover:flex"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+
+            {/* Add ingredient tiles */}
+            {outOfCategory.map((i) => (
+              <button
+                key={i.id}
+                type="button"
+                onClick={() => void attachIngredient(Number(selectedCat.id), i.id)}
+                aria-label={`Add ${i.name}`}
+                className="group overflow-hidden rounded-xl border-2 border-dashed border-border bg-cream-2/50 transition-all hover:border-brand/50 hover:bg-cream-2"
+              >
+                <img
+                  src={i.image ?? FALLBACK_THUMB}
+                  alt={i.name}
+                  className="h-16 w-full object-cover opacity-40 transition-opacity group-hover:opacity-70"
+                />
+                <p className="truncate px-1 py-1 text-center text-[10px] font-bold text-ink-muted group-hover:text-brand">
+                  + {i.name}
+                </p>
+              </button>
+            ))}
+
+            {inCategory.length === 0 && outOfCategory.length === 0 && (
+              <p className="col-span-full text-[11px] text-ink-muted">
+                No ingredients exist yet. Create some in the Ingredients tab.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {editing ? (
         <CategoryDialog
@@ -735,10 +982,12 @@ function CategoryDialog({
 
   const parentOptions = categories.filter(
     (c) =>
+      !c.id_category && // only top-level categories can be parents
       Number(c.id_division) === Number(divisionId) &&
       Number(c.id) !== Number(category?.id ?? -1),
   );
 
+  const isSubCategory = parentId !== "";
   const canSave = Boolean(name.trim()) && divisionId !== "" && !saving;
 
   const save = async () => {
@@ -773,8 +1022,9 @@ function CategoryDialog({
     >
       {err ? <DialogError message={err} /> : null}
       <div className="space-y-4 p-5">
+        {/* Image + name */}
         <div className="flex items-center gap-4">
-          <ImageUpload image={image} fallback={FALLBACK_THUMB} onPick={setImage} />
+          <ImageUpload image={image} fallback={FALLBACK_CAT} onPick={setImage} large />
           <div className="min-w-0 flex-1 space-y-2">
             <input
               value={name}
@@ -794,47 +1044,93 @@ function CategoryDialog({
             </label>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-              Division
-            </span>
-            <select
-              value={divisionId}
-              onChange={(e) => {
-                setDivisionId(e.target.value ? Number(e.target.value) : "");
-                setParentId("");
+
+        {/* Division */}
+        <label className="block">
+          <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+            Division
+          </span>
+          <select
+            value={divisionId}
+            onChange={(e) => {
+              setDivisionId(e.target.value ? Number(e.target.value) : "");
+              setParentId("");
+            }}
+            aria-label="Division"
+            className="login-field mt-1 !pl-3"
+          >
+            <option value="">Pick a division...</option>
+            {divisions.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* Parent — visual toggle: top-level vs sub-category */}
+        <div>
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+            Type
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setParentId("")}
+              className={`rounded-xl border-2 p-3 text-left transition-all ${
+                !isSubCategory
+                  ? "border-brand bg-brand/5 shadow-sm"
+                  : "border-border hover:border-brand/40"
+              }`}
+            >
+              <p className="text-[11px] font-extrabold text-ink">
+                {!isSubCategory && <Check className="mb-0.5 mr-1 inline h-3 w-3 text-brand" />}
+                Top-level
+              </p>
+              <p className="mt-0.5 text-[10px] text-ink-muted">
+                e.g. Pizza, Burgers, Cold Drinks
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (parentOptions.length > 0) setParentId(parentOptions[0].id);
               }}
-              aria-label="Division"
-              className="login-field mt-1 !pl-3"
+              disabled={divisionId === "" || parentOptions.length === 0}
+              className={`rounded-xl border-2 p-3 text-left transition-all disabled:opacity-40 ${
+                isSubCategory
+                  ? "border-brand bg-brand/5 shadow-sm"
+                  : "border-border hover:border-brand/40"
+              }`}
             >
-              <option value="">Pick a division...</option>
-              {divisions.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-              Parent (optional)
-            </span>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : "")}
-              disabled={divisionId === ""}
-              aria-label="Parent category"
-              className="login-field mt-1 !pl-3 disabled:opacity-50"
-            >
-              <option value="">No parent</option>
-              {parentOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <p className="text-[11px] font-extrabold text-ink">
+                {isSubCategory && <Check className="mb-0.5 mr-1 inline h-3 w-3 text-brand" />}
+                Sub-category
+              </p>
+              <p className="mt-0.5 text-[10px] text-ink-muted">
+                Joins a parent category
+              </p>
+            </button>
+          </div>
+
+          {isSubCategory && (
+            <div className="mt-2">
+              <select
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : "")}
+                disabled={divisionId === ""}
+                aria-label="Parent category"
+                className="login-field !pl-3 disabled:opacity-50"
+              >
+                <option value="">Choose parent...</option>
+                {parentOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
       <DialogFooter
@@ -924,7 +1220,7 @@ function ProductsTab({
           <option value="all">All categories</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {c.id_category ? `  ↳ ${c.name}` : c.name}
             </option>
           ))}
         </select>
@@ -1064,6 +1360,14 @@ function DishDialog({
     [categories, divisionId],
   );
 
+  // Top-level categories for the visual picker
+  const topLevelCats = useMemo(
+    () => divisionCategories.filter((c) => !c.id_category),
+    [divisionCategories],
+  );
+  const subCatsOf = (parentId: number) =>
+    divisionCategories.filter((c) => Number(c.id_category) === parentId);
+
   useEffect(() => {
     if (!categoryId) {
       setEligible([]);
@@ -1081,9 +1385,7 @@ function DishDialog({
       .finally(() => {
         if (!cancelled) setLoadingIngredients(false);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [categoryId]);
 
   useEffect(() => {
@@ -1098,9 +1400,7 @@ function DishDialog({
       .catch((e) => {
         if (!cancelled) setErr(e instanceof Error ? e.message : "Could not load the dish");
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1122,6 +1422,7 @@ function DishDialog({
       {
         id_ingredient: ing.id,
         name: ing.name,
+        image: ing.image,
         is_ingredient: ing.is_ingredient,
         is_supplementaire: false,
         is_removable: false,
@@ -1236,255 +1537,329 @@ function DishDialog({
     <DialogShell
       label={mode === "create" ? "New product" : `Modify ${product?.name ?? "dish"}`}
       onClose={onClose}
-      maxWidth="max-w-4xl"
+      maxWidth="max-w-5xl"
     >
       {err ? <DialogError message={err} /> : null}
 
-      <div className="grid gap-5 p-5 md:grid-cols-[1.4fr_1fr]">
-        {/* LEFT: dish fields */}
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-                1. Division
-              </span>
-              <select
-                value={divisionId}
-                onChange={(e) => pickDivision(e.target.value ? Number(e.target.value) : "")}
-                aria-label="Division"
-                className="login-field mt-1 !pl-3"
-              >
-                <option value="">Pick a division...</option>
-                {divisions.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                    {d.name_ar ? ` (${d.name_ar})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-                2. Category
-              </span>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}
-                disabled={divisionId === ""}
-                aria-label="Category"
-                className="login-field mt-1 !pl-3 disabled:opacity-50"
-              >
-                <option value="">
-                  {divisionId === "" ? "Division first..." : "Pick a category..."}
-                </option>
-                {divisionCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id_category ? `- ${c.name}` : c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+      <div className="grid gap-0 md:grid-cols-[1fr_340px]">
+        {/* ===== LEFT COLUMN ===== */}
+        <div className="space-y-5 p-5">
 
-          <div className="flex gap-3">
-            <ImageUpload image={image} fallback={FALLBACK_DISH} large onPick={setImage} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Dish name"
-                aria-label="Dish name"
-                className="login-field !pl-3"
-              />
-              <div className="flex items-center rounded-[4px] border border-border bg-cream-1 px-2">
-                <span className="text-sm font-extrabold text-ink-muted">$</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={price}
-                  onChange={(e) => setPriceInput(e.target.value)}
-                  placeholder="0.00"
-                  aria-label="Dish price"
-                  className="w-24 bg-transparent px-1 py-2 text-sm font-extrabold text-ink outline-none"
-                />
-              </div>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Short description (optional)"
-                aria-label="Description"
-                rows={2}
-                className="login-field !h-auto !pl-3"
-              />
+          {/* Step 1 — Division */}
+          <div>
+            <StepLabel n={1} label="Division" />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {divisions.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => pickDivision(Number(d.id))}
+                  className={`rounded-xl border-2 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.12em] transition-all ${
+                    Number(divisionId) === Number(d.id)
+                      ? "border-brand bg-brand text-cream-1 shadow"
+                      : "border-border bg-cream-2 text-ink-secondary hover:border-brand/50"
+                  }`}
+                >
+                  {d.name}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Attached ingredients */}
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-              Attached ingredients
-            </p>
-            {attached.length === 0 ? (
-              <p className="mt-2 text-[11px] text-ink-muted">
-                Nothing attached yet. Ingredients come from the category panel on the right.
-              </p>
-            ) : null}
-            <ul className="mt-2 grid gap-1.5">
-              {attached.map((a) => {
-                const bad = categoryId !== "" && !eligibleIds.has(Number(a.id_ingredient));
-                return (
-                  <li
-                    key={a.id_ingredient}
-                    className={`flex flex-wrap items-center gap-2 rounded-[4px] border px-3 py-1.5 text-sm ${
-                      bad ? "border-brand bg-brand/10" : "border-border bg-cream-2/50"
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1 truncate font-semibold">{a.name}</span>
-                    {bad ? (
-                      <>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-brand">
-                          <AlertTriangle className="h-3 w-3" /> Not in this category
-                        </span>
-                        <button
-                          onClick={() => void allowInCategory(a)}
-                          className="rounded-[3px] bg-brand/15 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-brand hover:bg-brand/25"
+          {/* Step 2 — Category (image cards) */}
+          {divisionId !== "" && (
+            <div>
+              <StepLabel n={2} label="Category" />
+              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {topLevelCats.map((cat) => {
+                  const subs = subCatsOf(cat.id);
+                  const catSelected = Number(categoryId) === Number(cat.id);
+                  return (
+                    <div key={cat.id}>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryId(Number(cat.id))}
+                        className={`group relative w-full overflow-hidden rounded-xl border-2 transition-all ${
+                          catSelected
+                            ? "border-brand shadow-md"
+                            : "border-border hover:border-brand/40"
+                        }`}
+                      >
+                        <img
+                          src={cat.image ?? FALLBACK_CAT}
+                          alt={cat.name}
+                          className="h-16 w-full object-cover"
+                        />
+                        <div
+                          className={`absolute inset-0 flex items-end p-1 ${
+                            catSelected ? "bg-brand/50" : "bg-brown/40"
+                          }`}
                         >
-                          Allow in category
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <FlagButton
-                          on={a.is_ingredient}
-                          label="Standard"
-                          onClick={() =>
-                            patchAttached(a.id_ingredient, (x) => ({ ...x, is_ingredient: !x.is_ingredient }))
-                          }
-                        />
-                        <FlagButton
-                          on={a.is_removable}
-                          label="Removable"
-                          onClick={() =>
-                            patchAttached(a.id_ingredient, (x) => ({ ...x, is_removable: !x.is_removable }))
-                          }
-                        />
-                        <FlagButton
-                          on={a.is_supplementaire}
-                          label="Add-on"
-                          onClick={() =>
-                            patchAttached(a.id_ingredient, (x) => ({
-                              ...x,
-                              is_supplementaire: !x.is_supplementaire,
-                            }))
-                          }
-                        />
-                        {a.is_supplementaire ? (
-                          <div className="flex items-center rounded-[4px] border border-border bg-cream-1 px-2">
-                            <span className="text-xs font-extrabold text-ink-muted">+$</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={a.price_supplementaire ?? ""}
-                              onChange={(e) =>
-                                patchAttached(a.id_ingredient, (x) => ({
-                                  ...x,
-                                  price_supplementaire: e.target.value,
-                                }))
-                              }
-                              aria-label={`Add-on price for ${a.name}`}
-                              className="w-14 bg-transparent px-1 py-1 text-xs font-extrabold text-ink outline-none"
-                            />
-                          </div>
-                        ) : null}
-                      </>
-                    )}
-                    <button
-                      onClick={() => detach(a.id_ingredient)}
-                      aria-label={`Remove ${a.name}`}
-                      className="text-ink-muted hover:text-brand"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                          {catSelected && (
+                            <Check className="absolute right-1 top-1 h-3.5 w-3.5 text-cream-1" />
+                          )}
+                          <span className="w-full truncate text-center text-[9px] font-extrabold uppercase tracking-[0.1em] text-cream-1">
+                            {cat.name}
+                          </span>
+                        </div>
+                      </button>
+                      {/* Sub-categories */}
+                      {subs.length > 0 && (
+                        <div className="mt-1 space-y-1">
+                          {subs.map((sub) => {
+                            const subSel = Number(categoryId) === Number(sub.id);
+                            return (
+                              <button
+                                key={sub.id}
+                                type="button"
+                                onClick={() => setCategoryId(Number(sub.id))}
+                                className={`flex w-full items-center gap-1.5 overflow-hidden rounded-lg border-2 text-left transition-all ${
+                                  subSel
+                                    ? "border-brand bg-brand/10"
+                                    : "border-border bg-cream-2 hover:border-brand/40"
+                                }`}
+                              >
+                                <img
+                                  src={sub.image ?? FALLBACK_CAT}
+                                  alt={sub.name}
+                                  className="h-8 w-8 shrink-0 object-cover"
+                                />
+                                <span className="truncate text-[9px] font-bold text-ink">
+                                  {sub.name}
+                                </span>
+                                {subSel && <Check className="ml-auto mr-1 h-3 w-3 shrink-0 text-brand" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3 — Dish details */}
+          <div>
+            <StepLabel n={3} label="Dish details" />
+            <div className="mt-2 flex gap-3">
+              <ImageUpload image={image} fallback={FALLBACK_DISH} large onPick={setImage} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Dish name"
+                  aria-label="Dish name"
+                  className="login-field !pl-3"
+                />
+                <div className="flex items-center rounded-[4px] border border-border bg-cream-1 px-2">
+                  <span className="text-sm font-extrabold text-ink-muted">$</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={price}
+                    onChange={(e) => setPriceInput(e.target.value)}
+                    placeholder="0.00"
+                    aria-label="Dish price"
+                    className="w-24 bg-transparent px-1 py-2 text-sm font-extrabold text-ink outline-none"
+                  />
+                </div>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Short description (optional)"
+                  aria-label="Description"
+                  rows={2}
+                  className="login-field !h-auto !pl-3"
+                />
+              </div>
+            </div>
           </div>
+
+          {/* Attached ingredients summary */}
+          {attached.length > 0 && (
+            <div>
+              <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+                Attached ingredients
+              </p>
+              <ul className="grid gap-1.5">
+                {attached.map((a) => {
+                  const bad = categoryId !== "" && !eligibleIds.has(Number(a.id_ingredient));
+                  return (
+                    <li
+                      key={a.id_ingredient}
+                      className={`flex flex-wrap items-center gap-2 rounded-[4px] border px-3 py-1.5 text-sm ${
+                        bad ? "border-brand bg-brand/10" : "border-border bg-cream-2/50"
+                      }`}
+                    >
+                      {a.image ? (
+                        <img src={a.image} alt="" className="h-6 w-6 rounded-full object-cover" />
+                      ) : null}
+                      <span className="min-w-0 flex-1 truncate font-semibold">{a.name}</span>
+                      {bad ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-brand">
+                            <AlertTriangle className="h-3 w-3" /> Not in this category
+                          </span>
+                          <button
+                            onClick={() => void allowInCategory(a)}
+                            className="rounded-[3px] bg-brand/15 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-brand hover:bg-brand/25"
+                          >
+                            Allow in category
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <FlagButton
+                            on={a.is_ingredient}
+                            label="Standard"
+                            onClick={() =>
+                              patchAttached(a.id_ingredient, (x) => ({ ...x, is_ingredient: !x.is_ingredient }))
+                            }
+                          />
+                          <FlagButton
+                            on={a.is_removable}
+                            label="Removable"
+                            onClick={() =>
+                              patchAttached(a.id_ingredient, (x) => ({ ...x, is_removable: !x.is_removable }))
+                            }
+                          />
+                          <FlagButton
+                            on={a.is_supplementaire}
+                            label="Add-on"
+                            onClick={() =>
+                              patchAttached(a.id_ingredient, (x) => ({
+                                ...x,
+                                is_supplementaire: !x.is_supplementaire,
+                              }))
+                            }
+                          />
+                          {a.is_supplementaire ? (
+                            <div className="flex items-center rounded-[4px] border border-border bg-cream-1 px-2">
+                              <span className="text-xs font-extrabold text-ink-muted">+$</span>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={a.price_supplementaire ?? ""}
+                                onChange={(e) =>
+                                  patchAttached(a.id_ingredient, (x) => ({
+                                    ...x,
+                                    price_supplementaire: e.target.value,
+                                  }))
+                                }
+                                aria-label={`Add-on price for ${a.name}`}
+                                className="w-14 bg-transparent px-1 py-1 text-xs font-extrabold text-ink outline-none"
+                              />
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                      <button
+                        onClick={() => detach(a.id_ingredient)}
+                        aria-label={`Remove ${a.name}`}
+                        className="text-ink-muted hover:text-brand"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
 
-        {/* RIGHT: category-scoped ingredient panel */}
-        <div className="rounded-[8px] border border-border bg-cream-2/50 p-3">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-            3. Category ingredients
-          </p>
+        {/* ===== RIGHT COLUMN — ingredient picker ===== */}
+        <div className="border-l border-border bg-cream-2/40 p-4">
+          <StepLabel n={4} label="Pick ingredients" />
+
           {categoryId === "" ? (
-            <p className="mt-2 text-[11px] text-ink-muted">
-              Pick a division and a category first. Only that category's eligible ingredients can be attached.
+            <p className="mt-3 text-[11px] text-ink-muted">
+              Select a division and category first.
             </p>
           ) : (
             <>
-              <p className="mt-1 text-[11px] text-ink-muted">
-                Only ingredients marked eligible for this category are listed.
-              </p>
               {loadingIngredients ? (
-                <p className="mt-3 inline-flex items-center gap-2 text-sm text-ink-muted">
+                <p className="mt-4 inline-flex items-center gap-2 text-sm text-ink-muted">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading...
                 </p>
               ) : (
-                <ul className="mt-3 grid max-h-[340px] gap-1.5 overflow-y-auto pr-1">
-                  {eligible.map((ing) => {
-                    const already = attached.some((a) => a.id_ingredient === ing.id);
-                    return (
-                      <li
-                        key={ing.id}
-                        className="flex items-center gap-2 rounded-[4px] border border-border bg-cream-1 px-2.5 py-1.5 text-sm"
-                      >
-                        <span className="min-w-0 flex-1 truncate">{ing.name}</span>
+                <>
+                  {/* Image grid of eligible ingredients */}
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {eligible.map((ing) => {
+                      const already = attached.some((a) => a.id_ingredient === ing.id);
+                      return (
                         <button
+                          key={ing.id}
+                          type="button"
                           onClick={() => attach(ing)}
                           disabled={already}
-                          aria-label={`Attach ${ing.name}`}
-                          className="rounded-[3px] bg-brand/10 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-brand hover:bg-brand/20 disabled:opacity-40"
+                          aria-label={already ? `${ing.name} attached` : `Attach ${ing.name}`}
+                          className={`group relative overflow-hidden rounded-xl border-2 transition-all ${
+                            already
+                              ? "border-success/60 opacity-60"
+                              : "border-border hover:border-brand/60 hover:shadow-sm"
+                          }`}
                         >
-                          {already ? "Attached" : "Attach"}
+                          <img
+                            src={ing.image ?? FALLBACK_THUMB}
+                            alt={ing.name}
+                            className="h-16 w-full object-cover"
+                          />
+                          <div
+                            className={`absolute inset-0 flex items-end p-1 ${
+                              already ? "bg-success/30" : "bg-brown/30 group-hover:bg-brand/30"
+                            }`}
+                          >
+                            {already && (
+                              <Check className="absolute right-1 top-1 h-3.5 w-3.5 text-cream-1" />
+                            )}
+                            <span className="w-full truncate text-center text-[9px] font-extrabold uppercase tracking-[0.08em] text-cream-1">
+                              {ing.name}
+                            </span>
+                          </div>
                         </button>
-                      </li>
-                    );
-                  })}
-                  {eligible.length === 0 ? (
-                    <li className="text-[11px] text-ink-muted">
-                      No eligible ingredients yet. Use quick add below.
-                    </li>
-                  ) : null}
-                </ul>
+                      );
+                    })}
+                    {eligible.length === 0 && (
+                      <p className="col-span-3 text-[11px] text-ink-muted">
+                        No eligible ingredients yet.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quick add */}
+                  <div className="mt-4 border-t border-border pt-3">
+                    <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
+                      Quick add to this category
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        value={quickName}
+                        onChange={(e) => setQuickName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && void quickAdd()}
+                        placeholder="Ingredient name"
+                        aria-label="Quick add ingredient"
+                        className="login-field !pl-3"
+                      />
+                      <button
+                        onClick={() => void quickAdd()}
+                        disabled={quickBusy || !quickName.trim()}
+                        className="shrink-0 rounded-[4px] bg-brand px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cream-1 disabled:opacity-50"
+                      >
+                        {quickBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-ink-muted">
+                      Creates the ingredient + links it to this category, then click its tile above.
+                    </p>
+                  </div>
+                </>
               )}
-              <div className="mt-3 border-t border-border pt-3">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink-muted">
-                  Quick add to this category
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    value={quickName}
-                    onChange={(e) => setQuickName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && void quickAdd()}
-                    placeholder="Ingredient name"
-                    aria-label="Quick add ingredient to this category"
-                    className="login-field !pl-3"
-                  />
-                  <button
-                    onClick={() => void quickAdd()}
-                    disabled={quickBusy || !quickName.trim()}
-                    className="shrink-0 rounded-[4px] bg-brand px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cream-1 disabled:opacity-50"
-                  >
-                    {quickBusy ? "..." : "Add"}
-                  </button>
-                </div>
-                <p className="mt-1.5 text-[10px] text-ink-muted">
-                  Creates the shared ingredient + its category eligibility, then attach it from the list.
-                </p>
-              </div>
             </>
           )}
         </div>
@@ -1494,7 +1869,7 @@ function DishDialog({
         {ineligible.length > 0 ? (
           <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-brand">
             <AlertTriangle className="h-3.5 w-3.5" />
-            {ineligible.length} attached ingredient{ineligible.length > 1 ? "s are" : " is"} not eligible in this category
+            {ineligible.length} ingredient{ineligible.length > 1 ? "s are" : " is"} not eligible in this category
           </span>
         ) : null}
         <button
@@ -1517,6 +1892,19 @@ function DishDialog({
 }
 
 /* ---------------------------- Shared UI pieces ---------------------------- */
+
+function StepLabel({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] font-extrabold text-cream-1">
+        {n}
+      </span>
+      <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 function DialogShell({
   label,
