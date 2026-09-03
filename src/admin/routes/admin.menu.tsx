@@ -38,13 +38,43 @@ type Category = {
   id_division: number;
 };
 
+type CategoryLink = {
+  id_category: number;
+  is_ingredient: boolean;
+  is_supplementaire: boolean;
+};
+
 type Ingredient = {
   id: number;
   name: string;
   is_available: boolean;
   image: string | null;
   category_ids: number[];
+  category_links: CategoryLink[];
 };
+
+/** How an ingredient behaves inside a category: part of the dish, a paid extra, or both. */
+type LinkRole = "principal" | "addon" | "both";
+
+const roleOf = (l: { is_ingredient: boolean; is_supplementaire: boolean }): LinkRole =>
+  l.is_ingredient && l.is_supplementaire ? "both" : l.is_supplementaire ? "addon" : "principal";
+
+const roleToFlags = (role: LinkRole) => ({
+  is_ingredient: role !== "addon",
+  is_supplementaire: role !== "principal",
+});
+
+const ROLE_LABEL: Record<LinkRole, string> = {
+  principal: "Principal",
+  addon: "Add-on",
+  both: "Principal + Add-on",
+};
+
+const ROLE_OPTIONS: { key: LinkRole; label: string }[] = [
+  { key: "principal", label: "Principal" },
+  { key: "addon", label: "Add-on" },
+  { key: "both", label: "Both" },
+];
 
 type EligibleIngredient = {
   id: number;
