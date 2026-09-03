@@ -243,13 +243,24 @@ router.delete("/categories/:id/ingredients/:ingredientId", ...adminOnly, async (
 
 router.get("/ingredients", async (_req, res, next) => {
   try {
-    // category_ids powers the associate/dissociate chips in the admin menu.
+    // category_ids powers the category chips in the admin menu; category_links
+    // carries the per-category role (principal ingredient / add-on) alongside.
     const { rows } = await query(
       `SELECT i.*,
               COALESCE(
                 json_agg(ci.id_category) FILTER (WHERE ci.id_category IS NOT NULL),
                 '[]'
-              ) AS category_ids
+              ) AS category_ids,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'id_category', ci.id_category,
+                    'is_ingredient', ci.is_ingredient,
+                    'is_supplementaire', ci.is_supplementaire
+                  )
+                ) FILTER (WHERE ci.id_category IS NOT NULL),
+                '[]'
+              ) AS category_links
        FROM ingredient i
        LEFT JOIN category_ingredient ci ON ci.id_ingredient = i.id
        GROUP BY i.id
