@@ -152,7 +152,14 @@ export default function AdminMenu() {
       setDivisions(d.divisions);
       setCategories(c.categories);
       setIngredients(
-        i.ingredients.map((x) => ({ ...x, category_ids: (x.category_ids ?? []).map(Number) })),
+        i.ingredients.map((x) => ({
+          ...x,
+          category_ids: (x.category_ids ?? []).map(Number),
+          category_links: (x.category_links ?? []).map((l) => ({
+            ...l,
+            id_category: Number(l.id_category),
+          })),
+        })),
       );
       setProducts(p.products);
     } catch (err) {
@@ -301,31 +308,6 @@ function IngredientsTab({
     }
   };
 
-  const associate = async (ingredientId: number, categoryId: number) => {
-    try {
-      await api(`/api/catalog/categories/${categoryId}/ingredients`, {
-        method: "POST",
-        body: { id_ingredient: ingredientId, is_ingredient: true, is_supplementaire: true },
-        token,
-      });
-      refresh();
-    } catch (e) {
-      fail(e, "Could not associate the category");
-    }
-  };
-
-  const dissociate = async (ingredientId: number, categoryId: number) => {
-    try {
-      await api(`/api/catalog/categories/${categoryId}/ingredients/${ingredientId}`, {
-        method: "DELETE",
-        token,
-      });
-      refresh();
-    } catch (e) {
-      fail(e, "Could not dissociate the category");
-    }
-  };
-
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -350,8 +332,10 @@ function IngredientsTab({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((ing) => {
-          const linked = categories.filter((c) => ing.category_ids.includes(Number(c.id)));
-          const unlinked = categories.filter((c) => !ing.category_ids.includes(Number(c.id)));
+          const linked = ing.category_links.flatMap((link) => {
+            const cat = categories.find((c) => Number(c.id) === link.id_category);
+            return cat ? [{ link, cat }] : [];
+          });
           return (
             <div
               key={ing.id}
@@ -365,11 +349,14 @@ function IngredientsTab({
                 />
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-base font-extrabold text-ink">{ing.name}</h3>
-                  <button onClick={() => void toggle(ing)} className="mt-1" aria-pressed={ing.is_available}>
-                    <Pill tone={ing.is_available ? "success" : "brand"}>
-                      {ing.is_available ? "Available" : "Unavailable"}
-                    </Pill>
-                  </button>
+                  <div className="mt-1.5">
+                    <ToggleSwitch
+                      on={ing.is_available}
+                      onChange={() => void toggle(ing)}
+                      labelOn="Available"
+                      labelOff="Not available"
+                    />
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
                   <button
@@ -395,41 +382,22 @@ function IngredientsTab({
                   Categories
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {linked.map((c) => (
+                  {linked.map(({ link, cat }) => (
                     <span
-                      key={c.id}
+                      key={cat.id}
                       className="inline-flex items-center gap-1.5 rounded-full border border-border bg-cream-2 py-1 pl-2.5 pr-1.5 text-[11px] font-bold text-ink-secondary"
                     >
-                      {c.image ? (
-                        <img src={c.image} alt="" className="h-4 w-4 rounded-full object-cover" />
+                      {cat.image ? (
+                        <img src={cat.image} alt="" className="h-4 w-4 rounded-full object-cover" />
                       ) : null}
-                      {c.name}
-                      <button
-                        onClick={() => void dissociate(ing.id, Number(c.id))}
-                        aria-label={`Dissociate ${ing.name} from ${c.name}`}
-                        className="rounded-full p-0.5 text-ink-muted hover:bg-brand/10 hover:text-brand"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      {cat.name}
+                      <RoleBadge role={roleOf(link)} />
                     </span>
                   ))}
                   {linked.length === 0 ? (
-                    <span className="text-[11px] text-ink-muted">Not in any category yet.</span>
-                  ) : null}
-                  {unlinked.length > 0 ? (
-                    <select
-                      value=""
-                      onChange={(e) => e.target.value && void associate(ing.id, Number(e.target.value))}
-                      aria-label={`Associate ${ing.name} to a category`}
-                      className="cursor-pointer rounded-full border border-dashed border-brand/60 bg-transparent px-2 py-1 text-[11px] font-bold text-brand outline-none"
-                    >
-                      <option value="">+ Associate...</option>
-                      {unlinked.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="text-[11px] text-ink-muted">
+                      Not in any category yet. Use the edit button to associate one.
+                    </span>
                   ) : null}
                 </div>
               </div>
