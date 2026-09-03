@@ -461,7 +461,6 @@ function IngredientDialog({
   const canSave = Boolean(name.trim()) && !saving;
 
   const isLinked = (id: number) => id in links;
-  const isPrincipal = (id: number) => links[id] !== "addon";
 
   const toggleCategory = (id: number) => {
     setLinks((prev) => {
@@ -472,8 +471,7 @@ function IngredientDialog({
     });
   };
 
-  const toggleRole = (id: number) =>
-    setLinks((prev) => ({ ...prev, [id]: prev[id] === "addon" ? "principal" : "addon" }));
+  const setRole = (id: number, role: LinkRole) => setLinks((prev) => ({ ...prev, [id]: role }));
 
   const save = async () => {
     if (!canSave) return;
@@ -565,7 +563,8 @@ function IngredientDialog({
           <p className="mb-2 mt-1 text-[11px] text-ink-muted">
             Pick the categories this ingredient belongs to, then use the switch to say whether it is a{" "}
             <strong className="text-success">principal</strong> ingredient or an{" "}
-            <strong className="text-brand">add-on</strong> for that category.
+            <strong className="text-brand">add-on</strong> for that category. Tick{" "}
+            <strong>Both</strong> when it can be either.
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {topLevel.map((cat) => {
@@ -602,15 +601,7 @@ function IngredientDialog({
                     </div>
                   </button>
                   {selected && (
-                    <div className="mt-1 flex justify-center rounded-lg border border-border bg-cream-2 px-2 py-1">
-                      <ToggleSwitch
-                        on={isPrincipal(cat.id)}
-                        onChange={() => toggleRole(cat.id)}
-                        labelOn="Principal"
-                        labelOff="Add-on"
-                        offTone="brand"
-                      />
-                    </div>
+                    <RoleControl role={links[cat.id]} onChange={(r) => setRole(cat.id, r)} />
                   )}
                   {/* Sub-categories */}
                   {subs.length > 0 && (
@@ -632,15 +623,7 @@ function IngredientDialog({
                               <span className="truncate">{sub.name}</span>
                             </button>
                             {subSelected && (
-                              <div className="mt-1 flex justify-center rounded-lg border border-border bg-cream-2 px-2 py-1">
-                                <ToggleSwitch
-                                  on={isPrincipal(sub.id)}
-                                  onChange={() => toggleRole(sub.id)}
-                                  labelOn="Principal"
-                                  labelOff="Add-on"
-                                  offTone="brand"
-                                />
-                              </div>
+                              <RoleControl role={links[sub.id]} onChange={(r) => setRole(sub.id, r)} />
                             )}
                           </div>
                         );
@@ -2071,6 +2054,7 @@ function ToggleSwitch({
   labelOn,
   labelOff,
   offTone = "muted",
+  disabled = false,
 }: {
   on: boolean;
   onChange: () => void;
@@ -2078,6 +2062,7 @@ function ToggleSwitch({
   labelOff: string;
   /** Colour of the "off" state: neutral grey, or brand red when off is a real choice (e.g. Add-on). */
   offTone?: "muted" | "brand";
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -2085,7 +2070,8 @@ function ToggleSwitch({
       role="switch"
       aria-checked={on}
       onClick={onChange}
-      className="inline-flex items-center gap-2"
+      disabled={disabled}
+      className="inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span
         className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
@@ -2110,6 +2096,36 @@ function ToggleSwitch({
         {on ? labelOn : labelOff}
       </span>
     </button>
+  );
+}
+
+/**
+ * Per-category role control used in the ingredient dialog (create and modify):
+ * a "Both" checkbox on the left, and the Principal / Add-on switch on the right.
+ */
+function RoleControl({ role, onChange }: { role: LinkRole; onChange: (role: LinkRole) => void }) {
+  const both = role === "both";
+  return (
+    <div className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-border bg-cream-2 px-2 py-1">
+      <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-bold text-ink-secondary">
+        <input
+          type="checkbox"
+          checked={both}
+          onChange={(e) => onChange(e.target.checked ? "both" : "principal")}
+          aria-label="Both principal and add-on"
+          className="h-3.5 w-3.5 accent-[#A80D25]"
+        />
+        Both
+      </label>
+      <ToggleSwitch
+        on={role !== "addon"}
+        onChange={() => onChange(role === "addon" ? "principal" : "addon")}
+        labelOn={both ? "Principal + Add-on" : "Principal"}
+        labelOff="Add-on"
+        offTone="brand"
+        disabled={both}
+      />
+    </div>
   );
 }
 
