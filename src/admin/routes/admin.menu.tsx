@@ -446,20 +446,34 @@ function IngredientDialog({
   const [name, setName] = useState(ingredient?.name ?? "");
   const [image, setImage] = useState<string | null>(ingredient?.image ?? null);
   const [available, setAvailable] = useState(ingredient?.is_available ?? true);
-  // For create mode: which categories to immediately associate
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>(
-    ingredient?.category_ids ?? [],
+  // Category id -> role. Seeded from the existing links when editing.
+  const initialLinks = useMemo<Record<number, LinkRole>>(
+    () =>
+      Object.fromEntries(
+        (ingredient?.category_links ?? []).map((l) => [l.id_category, roleOf(l)]),
+      ),
+    [ingredient],
   );
+  const [links, setLinks] = useState<Record<number, LinkRole>>(initialLinks);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const canSave = Boolean(name.trim()) && !saving;
 
+  const isLinked = (id: number) => id in links;
+  const isPrincipal = (id: number) => links[id] !== "addon";
+
   const toggleCategory = (id: number) => {
-    setSelectedCategoryIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setLinks((prev) => {
+      const next = { ...prev };
+      if (id in next) delete next[id];
+      else next[id] = "principal";
+      return next;
+    });
   };
+
+  const toggleRole = (id: number) =>
+    setLinks((prev) => ({ ...prev, [id]: prev[id] === "addon" ? "principal" : "addon" }));
 
   const save = async () => {
     if (!canSave) return;
@@ -475,19 +489,35 @@ function IngredientDialog({
           token,
         });
         ingredientId = res.ingredient.id;
-        // Associate to selected categories immediately
-        await Promise.all(
-          selectedCategoryIds.map((catId) =>
-            api(`/api/catalog/categories/${catId}/ingredients`, {
-              method: "POST",
-              body: { id_ingredient: ingredientId, is_ingredient: true, is_supplementaire: true },
-              token,
-            }),
-          ),
-        );
       } else if (ingredient) {
         await api(`/api/catalog/ingredients/${ingredient.id}`, { method: "PATCH", body, token });
+        ingredientId = ingredient.id;
+      } else {
+        setSaving(false);
+        return;
       }
+
+      // Sync category links: upsert new/changed roles, delete the removed ones.
+      const upserts = Object.entries(links)
+        .map(([catId, role]) => [Number(catId), role] as const)
+        .filter(([catId, role]) => initialLinks[catId] !== role)
+        .map(([catId, role]) =>
+          api(`/api/catalog/categories/${catId}/ingredients`, {
+            method: "POST",
+            body: { id_ingredient: ingredientId, ...roleToFlags(role) },
+            token,
+          }),
+        );
+      const removals = Object.keys(initialLinks)
+        .map(Number)
+        .filter((catId) => !(catId in links))
+        .map((catId) =>
+          api(`/api/catalog/categories/${catId}/ingredients/${ingredientId}`, {
+            method: "DELETE",
+            token,
+          }),
+        );
+      await Promise.all([...upserts, ...removals]);
       onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Save failed");
@@ -518,27 +548,29 @@ function IngredientDialog({
               aria-label="Ingredient name"
               className="login-field !pl-3"
             />
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-secondary">
-              <input
-                type="checkbox"
-                checked={available}
-                onChange={(e) => setAvailable(e.target.checked)}
-                className="h-4 w-4 accent-[#A80D25]"
-              />
-              Available in the kitchen
-            </label>
+            <ToggleSwitch
+              on={available}
+              onChange={() => setAvailable((v) => !v)}
+              labelOn="Available in the kitchen"
+              labelOff="Not available"
+            />
           </div>
         </div>
 
         {/* Category association */}
         <div>
-          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
             {mode === "create" ? "Associate to categories (optional)" : "Categories"}
+          </p>
+          <p className="mb-2 mt-1 text-[11px] text-ink-muted">
+            Pick the categories this ingredient belongs to, then use the switch to say whether it is a{" "}
+            <strong className="text-success">principal</strong> ingredient or an{" "}
+            <strong className="text-brand">add-on</strong> for that category.
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {topLevel.map((cat) => {
               const subs = subOf(cat.id);
-              const selected = selectedCategoryIds.includes(cat.id);
+              const selected = isLinked(cat.id);
               return (
                 <div key={cat.id}>
                   {/* Parent category card */}
@@ -569,25 +601,48 @@ function IngredientDialog({
                       </span>
                     </div>
                   </button>
+                  {selected && (
+                    <div className="mt-1 flex justify-center rounded-lg border border-border bg-cream-2 px-2 py-1">
+                      <ToggleSwitch
+                        on={isPrincipal(cat.id)}
+                        onChange={() => toggleRole(cat.id)}
+                        labelOn="Principal"
+                        labelOff="Add-on"
+                        offTone="brand"
+                      />
+                    </div>
+                  )}
                   {/* Sub-categories */}
                   {subs.length > 0 && (
                     <div className="mt-1 space-y-1 pl-2">
                       {subs.map((sub) => {
-                        const subSelected = selectedCategoryIds.includes(sub.id);
+                        const subSelected = isLinked(sub.id);
                         return (
-                          <button
-                            key={sub.id}
-                            type="button"
-                            onClick={() => toggleCategory(sub.id)}
-                            className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-bold transition-all ${
-                              subSelected
-                                ? "border-brand bg-brand/10 text-brand"
-                                : "border-border bg-cream-2 text-ink-secondary hover:border-brand/40"
-                            }`}
-                          >
-                            {subSelected && <Check className="h-3 w-3 shrink-0" />}
-                            <span className="truncate">{sub.name}</span>
-                          </button>
+                          <div key={sub.id}>
+                            <button
+                              type="button"
+                              onClick={() => toggleCategory(sub.id)}
+                              className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-bold transition-all ${
+                                subSelected
+                                  ? "border-brand bg-brand/10 text-brand"
+                                  : "border-border bg-cream-2 text-ink-secondary hover:border-brand/40"
+                              }`}
+                            >
+                              {subSelected && <Check className="h-3 w-3 shrink-0" />}
+                              <span className="truncate">{sub.name}</span>
+                            </button>
+                            {subSelected && (
+                              <div className="mt-1 flex justify-center rounded-lg border border-border bg-cream-2 px-2 py-1">
+                                <ToggleSwitch
+                                  on={isPrincipal(sub.id)}
+                                  onChange={() => toggleRole(sub.id)}
+                                  labelOn="Principal"
+                                  labelOff="Add-on"
+                                  offTone="brand"
+                                />
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
@@ -884,27 +939,35 @@ function CategoriesTab({
 
           {/* Ingredient image grid */}
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            {inCategory.map((i) => (
-              <div key={i.id} className="group relative">
-                <div className="overflow-hidden rounded-xl border-2 border-success/40 bg-cream-2">
-                  <img
-                    src={i.image ?? FALLBACK_THUMB}
-                    alt={i.name}
-                    className="h-16 w-full object-cover"
-                  />
-                  <p className="truncate px-1 py-1 text-center text-[10px] font-bold text-ink">
-                    {i.name}
-                  </p>
+            {inCategory.map((i) => {
+              const link = i.category_links.find((l) => l.id_category === Number(selectedCat.id));
+              return (
+                <div key={i.id} className="group relative">
+                  {link ? (
+                    <span className="pointer-events-none absolute left-1 top-1 z-10 rounded-full bg-cream-1 shadow">
+                      <RoleBadge role={roleOf(link)} short />
+                    </span>
+                  ) : null}
+                  <div className="overflow-hidden rounded-xl border-2 border-success/40 bg-cream-2">
+                    <img
+                      src={i.image ?? FALLBACK_THUMB}
+                      alt={i.name}
+                      className="h-16 w-full object-cover"
+                    />
+                    <p className="truncate px-1 py-1 text-center text-[10px] font-bold text-ink">
+                      {i.name}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void detachIngredient(Number(selectedCat.id), i.id)}
+                    aria-label={`Remove ${i.name}`}
+                    className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-brand text-cream-1 shadow group-hover:flex"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => void detachIngredient(Number(selectedCat.id), i.id)}
-                  aria-label={`Remove ${i.name}`}
-                  className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-brand text-cream-1 shadow group-hover:flex"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Add ingredient tiles */}
             {outOfCategory.map((i) => (
@@ -1352,6 +1415,7 @@ function DishDialog({
   const [err, setErr] = useState<string | null>(null);
   const [quickName, setQuickName] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
+  const [quickRole, setQuickRole] = useState<LinkRole>("principal");
 
   const divisionCategories = useMemo(
     () => categories.filter((c) => Number(c.id_division) === Number(divisionId)),
@@ -1413,7 +1477,15 @@ function DishDialog({
     setEligible([]);
   };
 
-  const attach = (ing: EligibleIngredient) => {
+  // Eligible ingredients split by the role they play in the selected category.
+  const principalEligible = useMemo(
+    () => eligible.filter((e) => e.is_ingredient || !e.is_supplementaire),
+    [eligible],
+  );
+  const addonEligible = useMemo(() => eligible.filter((e) => e.is_supplementaire), [eligible]);
+  const attachedIds = useMemo(() => new Set(attached.map((a) => a.id_ingredient)), [attached]);
+
+  const attach = (ing: EligibleIngredient, as: "principal" | "addon") => {
     if (attached.some((a) => a.id_ingredient === ing.id)) return;
     setAttached((prev) => [
       ...prev,
@@ -1421,10 +1493,10 @@ function DishDialog({
         id_ingredient: ing.id,
         name: ing.name,
         image: ing.image,
-        is_ingredient: ing.is_ingredient,
-        is_supplementaire: false,
+        is_ingredient: as === "principal",
+        is_supplementaire: as === "addon",
         is_removable: false,
-        price_supplementaire: null,
+        price_supplementaire: as === "addon" ? 0 : null,
       },
     ]);
   };
@@ -1465,7 +1537,7 @@ function DishDialog({
       }
       await api(`/api/catalog/categories/${categoryId}/ingredients`, {
         method: "POST",
-        body: { id_ingredient: ingredientId, is_ingredient: true, is_supplementaire: true },
+        body: { id_ingredient: ingredientId, ...roleToFlags(quickRole) },
         token,
       });
       await refreshEligible();
@@ -1786,49 +1858,29 @@ function DishDialog({
                 </p>
               ) : (
                 <>
-                  {/* Image grid of eligible ingredients */}
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {eligible.map((ing) => {
-                      const already = attached.some((a) => a.id_ingredient === ing.id);
-                      return (
-                        <button
-                          key={ing.id}
-                          type="button"
-                          onClick={() => attach(ing)}
-                          disabled={already}
-                          aria-label={already ? `${ing.name} attached` : `Attach ${ing.name}`}
-                          className={`group relative overflow-hidden rounded-xl border-2 transition-all ${
-                            already
-                              ? "border-success/60 opacity-60"
-                              : "border-border hover:border-brand/60 hover:shadow-sm"
-                          }`}
-                        >
-                          <img
-                            src={ing.image ?? FALLBACK_THUMB}
-                            alt={ing.name}
-                            className="h-16 w-full object-cover"
-                          />
-                          <div
-                            className={`absolute inset-0 flex items-end p-1 ${
-                              already ? "bg-success/30" : "bg-brown/30 group-hover:bg-brand/30"
-                            }`}
-                          >
-                            {already && (
-                              <Check className="absolute right-1 top-1 h-3.5 w-3.5 text-cream-1" />
-                            )}
-                            <span className="w-full truncate text-center text-[9px] font-extrabold uppercase tracking-[0.08em] text-cream-1">
-                              {ing.name}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                    {eligible.length === 0 && (
-                      <p className="col-span-3 text-[11px] text-ink-muted">
-                        No eligible ingredients yet.
-                      </p>
-                    )}
-                  </div>
+                  {/* Eligible ingredients, split by their role in this category */}
+                  <IngredientTileGrid
+                    title="Principal ingredients"
+                    hint="Make up the dish"
+                    items={principalEligible}
+                    attachedIds={attachedIds}
+                    onPick={(ing) => attach(ing, "principal")}
+                    emptyLabel="No principal ingredient for this category yet."
+                  />
+                  <IngredientTileGrid
+                    title="Add-ons"
+                    hint="Optional paid extras"
+                    items={addonEligible}
+                    attachedIds={attachedIds}
+                    onPick={(ing) => attach(ing, "addon")}
+                    emptyLabel="No add-on for this category yet."
+                    tone="brand"
+                  />
+                  {eligible.length === 0 && (
+                    <p className="mt-2 text-[11px] text-ink-muted">
+                      Tip: associate ingredients to this category from the Ingredients tab (edit button).
+                    </p>
+                  )}
 
                   {/* Quick add */}
                   <div className="mt-4 border-t border-border pt-3">
@@ -1852,8 +1904,11 @@ function DishDialog({
                         {quickBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                       </button>
                     </div>
+                    <div className="mt-2">
+                      <RolePicker value={quickRole} onChange={setQuickRole} />
+                    </div>
                     <p className="mt-1.5 text-[10px] text-ink-muted">
-                      Creates the ingredient + links it to this category, then click its tile above.
+                      Creates the ingredient + links it to this category with the chosen role, then click its tile above.
                     </p>
                   </div>
                 </>
@@ -2015,11 +2070,14 @@ function ToggleSwitch({
   onChange,
   labelOn,
   labelOff,
+  offTone = "muted",
 }: {
   on: boolean;
   onChange: () => void;
   labelOn: string;
   labelOff: string;
+  /** Colour of the "off" state: neutral grey, or brand red when off is a real choice (e.g. Add-on). */
+  offTone?: "muted" | "brand";
 }) {
   return (
     <button
@@ -2031,7 +2089,11 @@ function ToggleSwitch({
     >
       <span
         className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-          on ? "border-success bg-success" : "border-border bg-cream-3"
+          on
+            ? "border-success bg-success"
+            : offTone === "brand"
+              ? "border-brand bg-brand"
+              : "border-border bg-cream-3"
         }`}
       >
         <span
@@ -2040,7 +2102,11 @@ function ToggleSwitch({
           }`}
         />
       </span>
-      <span className={`text-[11px] font-bold ${on ? "text-success" : "text-ink-muted"}`}>
+      <span
+        className={`text-[11px] font-bold ${
+          on ? "text-success" : offTone === "brand" ? "text-brand" : "text-ink-muted"
+        }`}
+      >
         {on ? labelOn : labelOff}
       </span>
     </button>
