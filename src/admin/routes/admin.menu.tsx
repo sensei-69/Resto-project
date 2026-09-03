@@ -2010,6 +2010,166 @@ function ImageUpload({
   );
 }
 
+function ToggleSwitch({
+  on,
+  onChange,
+  labelOn,
+  labelOff,
+}: {
+  on: boolean;
+  onChange: () => void;
+  labelOn: string;
+  labelOff: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onChange}
+      className="inline-flex items-center gap-2"
+    >
+      <span
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+          on ? "border-success bg-success" : "border-border bg-cream-3"
+        }`}
+      >
+        <span
+          className={`absolute left-0.5 h-4 w-4 rounded-full bg-cream-1 shadow transition-transform ${
+            on ? "translate-x-4" : "translate-x-0"
+          }`}
+        />
+      </span>
+      <span className={`text-[11px] font-bold ${on ? "text-success" : "text-ink-muted"}`}>
+        {on ? labelOn : labelOff}
+      </span>
+    </button>
+  );
+}
+
+function RoleBadge({ role, short = false }: { role: LinkRole; short?: boolean }) {
+  const tone =
+    role === "addon"
+      ? "bg-brand/10 text-brand"
+      : role === "both"
+        ? "bg-ink/8 text-ink-secondary"
+        : "bg-success/12 text-success";
+  const label = short && role === "both" ? "Both" : ROLE_LABEL[role];
+  return (
+    <span
+      className={`rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.08em] ${tone}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function RolePicker({ value, onChange }: { value: LinkRole; onChange: (role: LinkRole) => void }) {
+  const activeTone: Record<LinkRole, string> = {
+    principal: "bg-success text-cream-1 shadow-sm",
+    addon: "bg-brand text-cream-1 shadow-sm",
+    both: "bg-ink text-cream-1 shadow-sm",
+  };
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Role in this category"
+      className="grid grid-cols-3 gap-0.5 rounded-lg border border-border bg-cream-2 p-0.5"
+    >
+      {ROLE_OPTIONS.map((o) => {
+        const active = value === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.key)}
+            className={`rounded-md px-1 py-1 text-[9px] font-extrabold uppercase tracking-[0.06em] transition-colors ${
+              active ? activeTone[o.key] : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function IngredientTileGrid({
+  title,
+  hint,
+  items,
+  attachedIds,
+  onPick,
+  emptyLabel,
+  tone = "success",
+}: {
+  title: string;
+  hint: string;
+  items: EligibleIngredient[];
+  attachedIds: Set<number>;
+  onPick: (ing: EligibleIngredient) => void;
+  emptyLabel: string;
+  tone?: "success" | "brand";
+}) {
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <p
+          className={`text-[10px] font-extrabold uppercase tracking-[0.14em] ${
+            tone === "brand" ? "text-brand" : "text-success"
+          }`}
+        >
+          {title} <span className="text-ink-muted">({items.length})</span>
+        </p>
+        <span className="text-[10px] text-ink-muted">{hint}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {items.map((ing) => {
+          const already = attachedIds.has(ing.id);
+          return (
+            <button
+              key={ing.id}
+              type="button"
+              onClick={() => onPick(ing)}
+              disabled={already}
+              aria-label={already ? `${ing.name} attached` : `Attach ${ing.name}`}
+              className={`group relative overflow-hidden rounded-xl border-2 transition-all ${
+                already
+                  ? "border-success/60 opacity-60"
+                  : "border-border hover:border-brand/60 hover:shadow-sm"
+              }`}
+            >
+              <img
+                src={ing.image ?? FALLBACK_THUMB}
+                alt={ing.name}
+                className="h-16 w-full object-cover"
+              />
+              <div
+                className={`absolute inset-0 flex items-end p-1 ${
+                  already ? "bg-success/30" : "bg-brown/30 group-hover:bg-brand/30"
+                }`}
+              >
+                {already && (
+                  <Check className="absolute right-1 top-1 h-3.5 w-3.5 text-cream-1" />
+                )}
+                <span className="w-full truncate text-center text-[9px] font-extrabold uppercase tracking-[0.08em] text-cream-1">
+                  {ing.name}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+        {items.length === 0 && (
+          <p className="col-span-3 text-[11px] text-ink-muted">{emptyLabel}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FlagButton({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
     <button
