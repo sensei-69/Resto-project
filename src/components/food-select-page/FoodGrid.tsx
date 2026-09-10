@@ -1,4 +1,4 @@
-import { ChevronDown, Heart, Search, X } from "lucide-react";
+import { Eye, Heart, Search, X } from "lucide-react";
 import { PersonaliseModal } from "./PersonaliseModal";
 import type { FoodItem, PendingUnit } from "./types";
 
@@ -76,6 +76,7 @@ export function FoodGrid({
           const selected = count > 0;
           const fav = favorites.includes(food.id);
           const open = units.length > 0 && openDropId === food.id;
+          const showEye = selected;
 
           return (
             <article
@@ -83,7 +84,6 @@ export function FoodGrid({
               className={[
                 "fs-dish",
                 selected ? "fs-dish--selected" : "",
-                open ? "fs-dish--open" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -123,18 +123,14 @@ export function FoodGrid({
                 {selected && <span className="fs-dish-counter">{count}</span>}
               </button>
 
-              {selected && (
+              {showEye && (
                 <button
                   type="button"
-                  className={open ? "fs-dish-drop fs-dish-drop--open" : "fs-dish-drop"}
+                  className="fs-dish-eye"
                   onClick={() => onPersonalise(food)}
-                  aria-expanded={open}
-                  aria-label={`Show ${count} selected ${food.name}`}
+                  aria-label={`View ${food.name} options`}
                 >
-                  <span>
-                    {count} product{count === 1 ? "" : "s"}
-                  </span>
-                  <ChevronDown className="fs-dish-drop-icon" strokeWidth={2.6} />
+                  <Eye className="fs-dish-eye-icon" strokeWidth={2.4} />
                 </button>
               )}
 

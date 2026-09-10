@@ -16,8 +16,8 @@ function catPopularity(cat: FoodCategory) {
 }
 
 /** Find the category and subcategory that contain a given food id */
-function findCatAndSub(foodId: string) {
-  for (const cat of CATEGORIES) {
+function findCatAndSub(cats: FoodCategory[], foodId: string) {
+  for (const cat of cats) {
     for (const sub of cat.subcategories) {
       if (sub.items.some((item) => item.id === foodId)) {
         return { catId: cat.id, subId: sub.id };
@@ -89,19 +89,18 @@ export default function FoodSelectUI() {
   // On mount, if there's a dish we should auto-open (e.g. from landing page)
   const didAutoSelect = useRef(false);
   useEffect(() => {
-    if (didAutoSelect.current) return;
-    
+    if (didAutoSelect.current || catalogLoading) return;
+
     const state = location.state as { autoOpenDishId?: string } | null;
     if (!state || !state.autoOpenDishId) return;
 
-    const dishId = state.autoOpenDishId;
-    const loc = findCatAndSub(dishId);
+    const loc = findCatAndSub(liveCats, state.autoOpenDishId);
     if (loc) {
       setOpenCategoryId(loc.catId);
       setActiveSubId(loc.subId);
       didAutoSelect.current = true;
     }
-  }, [location.state]);
+  }, [location.state, catalogLoading, liveCats]);
 
   const sortedCategories = useMemo(() => {
     const list = [...liveCats];

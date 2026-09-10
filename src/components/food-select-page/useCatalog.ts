@@ -156,26 +156,23 @@ export function useCatalog(): CatalogState {
           .map((top) => {
             const subs = subsByCat.get(top.id) ?? [];
 
+            const itemsOf = (catId: number) =>
+              (productsByCat.get(catId) ?? [])
+                .filter((p) => p.is_available)
+                .map((p) => mapProduct(detailById.get(p.id) ?? p));
+
+            const ownItems = itemsOf(top.id);
+            const subSections = subs
+              .filter((s) => s.is_available)
+              .map((sub) => ({ id: `db-sub-${sub.id}`, name: sub.name, items: itemsOf(sub.id) }));
+
+            // A parent without sub-categories acts as its own single section
+            // (even with no dish yet). When it has sub-categories *and* dishes
+            // attached directly, those dishes get a section named after it.
             const subcategories =
-              subs.length > 0
-                ? subs
-                    .filter((s) => s.is_available)
-                    .map((sub) => ({
-                      id: `db-sub-${sub.id}`,
-                      name: sub.name,
-                      items: (productsByCat.get(sub.id) ?? [])
-                        .filter((p) => p.is_available)
-                        .map((p) => mapProduct(detailById.get(p.id) ?? p)),
-                    }))
-                : [
-                    {
-                      id: `db-sub-${top.id}`,
-                      name: top.name,
-                      items: (productsByCat.get(top.id) ?? [])
-                        .filter((p) => p.is_available)
-                        .map((p) => mapProduct(detailById.get(p.id) ?? p)),
-                    },
-                  ];
+              subSections.length === 0 || ownItems.length > 0
+                ? [{ id: `db-sub-${top.id}`, name: top.name, items: ownItems }, ...subSections]
+                : subSections;
 
             return {
               id: `db-cat-${top.id}`,
@@ -184,12 +181,13 @@ export function useCatalog(): CatalogState {
               image: top.image ?? placeholder(top.name),
               subcategories,
             };
-          })
-          .filter((c) => c.subcategories.some((s) => s.items.length > 0));
+          });
+        // Categories without dishes are kept so newly created ones show up
+        // immediately; the grid renders an empty state for them.
 
         // 6. Build CategorySection list from divisions.
         const catById = new Map(foodCategories.map((c) => [c.id, c]));
-        const divMap = new Map(divRes.divisions.map((d) => [d.id, d]));
+
 
         const used = new Set<string>();
         const sections: CategorySection[] = divRes.divisions

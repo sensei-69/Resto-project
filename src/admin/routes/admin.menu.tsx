@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Carrot,
   Check,
+  ChevronDown,
   FolderTree,
   ImagePlus,
   Layers,
@@ -669,6 +670,16 @@ function CategoriesTab({
 }) {
   const [editing, setEditing] = useState<{ mode: "create" | "edit"; category: Category | null } | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  // Which parent card currently shows its sub-category dropdown.
+  const [openSubsFor, setOpenSubsFor] = useState<number | null>(null);
+
+  // Close the dropdown when clicking anywhere else on the page.
+  useEffect(() => {
+    if (openSubsFor === null) return;
+    const close = () => setOpenSubsFor(null);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [openSubsFor]);
 
   const divisionName = (id: number) =>
     divisions.find((d) => Number(d.id) === Number(id))?.name ?? "No division";
@@ -743,7 +754,8 @@ function CategoriesTab({
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted">
-          Click a category to manage its ingredients. Sub-categories appear below their parent.
+          Click a category to manage its ingredients. Use the <strong>sub</strong> button on a card to
+          list its sub-categories.
         </p>
         <button
           className="login-cta !w-auto shrink-0 px-5"
@@ -760,8 +772,9 @@ function CategoriesTab({
         {topLevel.map((cat) => {
           const subs = subOf(cat.id);
           const isSelected = selected === cat.id;
+          const subsOpen = openSubsFor === cat.id;
           return (
-            <div key={cat.id}>
+            <div key={cat.id} className={`relative ${subsOpen ? "z-30" : ""}`}>
               {/* Parent card — full div is clickable */}
               <button
                 type="button"
@@ -804,13 +817,37 @@ function CategoriesTab({
                 </div>
                 {/* Action row */}
                 <div className="flex items-center justify-between gap-1 bg-cream-1 px-3 py-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); void toggle(cat); }}
-                    aria-label={`Toggle ${cat.name}`}
-                    className="text-[10px] font-bold text-ink-muted hover:text-brand"
-                  >
-                    {cat.is_available ? "Hide" : "Show"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void toggle(cat); }}
+                      aria-label={`Toggle ${cat.name}`}
+                      className="text-[10px] font-bold text-ink-muted hover:text-brand"
+                    >
+                      {cat.is_available ? "Hide" : "Show"}
+                    </button>
+                    {subs.length > 0 && (
+                      <button
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenSubsFor(subsOpen ? null : cat.id);
+                        }}
+                        aria-expanded={subsOpen}
+                        aria-label={`${subsOpen ? "Hide" : "Show"} sub-categories of ${cat.name}`}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold transition-colors ${
+                          subsOpen
+                            ? "border-brand bg-brand text-cream-1"
+                            : "border-border text-ink-secondary hover:border-brand hover:text-brand"
+                        }`}
+                      >
+                        <Layers className="h-3 w-3" />
+                        {subs.length} sub
+                        <ChevronDown
+                          className={`h-3 w-3 transition-transform ${subsOpen ? "rotate-180" : ""}`}
+                        />
+                      </button>
+                    )}
+                  </div>
                   <div className="flex gap-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditing({ mode: "edit", category: cat }); }}
@@ -830,9 +867,14 @@ function CategoriesTab({
                 </div>
               </button>
 
-              {/* Sub-categories row */}
-              {subs.length > 0 && (
-                <div className="mt-2 space-y-1.5 pl-3">
+              {/* Sub-categories dropdown: overlays the grid so other cards keep their place */}
+              {subs.length > 0 && subsOpen && (
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  role="region"
+                  aria-label={`Sub-categories of ${cat.name}`}
+                  className="absolute left-0 right-0 top-full z-30 mt-1 space-y-1.5 rounded-xl border border-border bg-cream-1 p-2 shadow-xl"
+                >
                   {subs.map((sub) => {
                     const subSelected = selected === sub.id;
                     return (

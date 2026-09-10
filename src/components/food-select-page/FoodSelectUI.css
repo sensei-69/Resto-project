@@ -1996,13 +1996,6 @@
   padding-right: 2px;
 }
 
-.fs-pers-panel .fs-pers-body {
-  /* show 2 products at their natural size, scroll for the rest */
-  max-height: 340px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-}
 
 
 .fs-pers-add {
@@ -2140,7 +2133,6 @@
   }
 }
 
-/* Persistent quantity and selected-products dropdown */
 .fs-dish-counter {
   position: absolute;
   top: 55px;
@@ -2161,6 +2153,38 @@
   line-height: 1;
   box-shadow: var(--shadow-flat);
   animation: fsPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Eye button – sits right under the counter badge */
+.fs-dish-eye {
+  position: absolute;
+  top: 100px;
+  right: 10px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(23, 23, 23, 0.65);
+  border: 2px solid rgba(255,255,255,0.7);
+  color: #ffffff;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: background 180ms ease, transform 180ms ease;
+  animation: fsPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 60ms;
+}
+
+.fs-dish-eye:hover {
+  background: rgba(23, 23, 23, 0.85);
+  transform: scale(1.12);
+}
+
+.fs-dish-eye-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .fs-dish-drop {
@@ -2217,30 +2241,59 @@
   }
 }
 
-/* ---------------- Inline dish dropdown panel ---------------- */
-.fs-dish--open {
-  overflow: visible;
-  z-index: 50;
+/* =============== Personalise modal overlay =============== */
+.fs-pers-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fsOverlayIn 220ms ease both;
+}
+
+@keyframes fsOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .fs-pers-panel {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 55;
-  margin-top: 8px;
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px;
+  padding: 16px;
   overflow: hidden;
-
   border-radius: var(--r-dish);
   border: 1px solid var(--color-border);
   background: var(--cream-1);
-  box-shadow: var(--shadow-glass), 0 18px 40px rgba(23, 23, 23, 0.35);
-  animation: fsPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45), var(--shadow-glass);
+  animation: fsModalIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fsModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(32px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.fs-pers-panel .fs-pers-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .fs-pers-panel-head {
@@ -2259,9 +2312,6 @@
   height: 38px;
   justify-content: center;
   border-radius: var(--r-dish);
-}
-
-.fs-pers-panel-head .fs-pers-cancel {
   background: #d92b2b;
 }
 
@@ -2296,32 +2346,135 @@
   height: 18px;
 }
 
-@media (max-width: 1023px) {
-  .fs-pers-panel {
-    position: relative;
-    top: auto;
-    left: auto;
-    right: auto;
-  }
-
-  .fs-pers-panel .fs-pers-body {
-    max-height: 420px;
-  }
+/* ---- Two-column layout inside modal ---- */
+.fs-pers-panel {
+  max-width: 900px;          /* wider to fit price sidebar */
 }
 
-@media (min-width: 1024px) {
-  .fs-pers-panel {
-    /* match the dish picture block width exactly */
-    width: auto;
-    left: 0;
-    right: 0;
-  }
+.fs-pers-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;             /* allow children to scroll */
+  overflow: hidden;
 }
 
+/* ---- Price summary sidebar ---- */
+.fs-pers-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: var(--r-dish);
+  border: 1px solid var(--color-border);
+  background: var(--cream-2);
+  overflow: hidden;
+}
 
-/* Let the inline dropdown escape the scrolling grid */
-.fs-food-grid:has(.fs-dish--open) {
-  overflow: visible;
+.fs-pers-prices-title {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--cream-3);
+}
+
+.fs-pers-prices-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+}
+
+.fs-pers-price-unit {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fs-pers-price-unit:last-child {
+  border-bottom: none;
+}
+
+.fs-pers-price-unit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.fs-pers-price-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.fs-pers-price-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.fs-pers-price-addon {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0 3px 12px;
+}
+
+.fs-pers-price-addon-name {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.fs-pers-price-addon-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6f9e3e;
+  white-space: nowrap;
+}
+
+.fs-pers-price-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.fs-pers-price-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-top: 2px solid var(--color-text);
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--color-text);
+  background: var(--cream-3);
+}
+
+@media (max-width: 700px) {
+  .fs-pers-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .fs-pers-panel {
+    max-width: 100%;
+  }
+
+  .fs-pers-prices {
+    max-height: 200px;
+  }
 }
 
 /* Cancel-order X on the dish card */

@@ -1,18 +1,34 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Utensils } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
-import { CATEGORIES } from "../food-select-page/data";
+import { useCatalog } from "../food-select-page/useCatalog";
 import type { FoodItem } from "../food-select-page/types";
 
 export function DishShow() {
   const navigate = useNavigate();
-  const { addToCartDirect } = useCart();
+  const { addToCartDirect, registerFood } = useCart();
+  // Live catalog from the database (static data is shown while it loads).
+  const { categories } = useCatalog();
 
-  // Pick interesting items for the marquee — grab first item from each subcategory
-  const dishes = CATEGORIES.flatMap(c => c.subcategories.map(s => s.items[0]))
-    .filter(Boolean)
-    .slice(0, 10) as FoodItem[];
+  // Pick interesting items for the marquee: the first dish of every
+  // sub-category, then fill up with the remaining dishes.
+  const dishes = useMemo(() => {
+    const firsts = categories
+      .flatMap((c) => c.subcategories.map((s) => s.items[0]))
+      .filter((d): d is FoodItem => Boolean(d));
+    const seen = new Set(firsts.map((d) => d.id));
+    const rest = categories
+      .flatMap((c) => c.subcategories.flatMap((s) => s.items))
+      .filter((d) => !seen.has(d.id));
+    return [...firsts, ...rest].slice(0, 12);
+  }, [categories]);
+
+  // Register the dishes so the cart drawer can resolve name, price and image.
+  useEffect(() => {
+    dishes.forEach(registerFood);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dishes]);
 
   const row = [...dishes, ...dishes, ...dishes];
 
