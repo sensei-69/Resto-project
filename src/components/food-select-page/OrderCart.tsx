@@ -8,6 +8,8 @@ interface Props {
   onRemove: (lineId: string) => void;
   onAddOnQty: (lineId: string, addOnId: string, delta: number) => void;
   onClear: () => void;
+  /** Opens the checkout step. */
+  onOrder?: () => void;
 }
 
 function lineTotal(line: CartLine, food: FoodItem) {
@@ -17,7 +19,7 @@ function lineTotal(line: CartLine, food: FoodItem) {
   return food.price * line.qty + extras;
 }
 
-export function OrderCart({ lines, foodById, onQty, onRemove, onAddOnQty, onClear }: Props) {
+export function OrderCart({ lines, foodById, onQty, onRemove, onAddOnQty, onClear, onOrder }: Props) {
   const total = lines.reduce((sum, l) => {
     const food = foodById.get(l.foodId);
     return food ? sum + lineTotal(l, food) : sum;
@@ -154,7 +156,7 @@ export function OrderCart({ lines, foodById, onQty, onRemove, onAddOnQty, onClea
           <div className="fs-price-number">${total.toFixed(2)}</div>
           <div className="fs-price-tag">Total</div>
         </div>
-        <button className="fs-order-btn" disabled={lines.length === 0}>
+        <button className="fs-order-btn" disabled={lines.length === 0} onClick={onOrder}>
           Order
         </button>
       </footer>

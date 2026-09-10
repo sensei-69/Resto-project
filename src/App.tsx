@@ -14,6 +14,7 @@ import TicketsPage from "./components/TicketsPage";
 import { GlobalCartDrawer } from "./components/GlobalCartDrawer";
 import AdminLayout from "./admin/routes/admin";
 import AdminOverview from "./admin/routes/admin.index";
+import AdminOrders from "./admin/routes/admin.orders";
 import AdminMenu from "./admin/routes/admin.menu";
 import AdminUsers from "./admin/routes/admin.users";
 import AdminOffers from "./admin/routes/admin.offers";
@@ -48,6 +49,7 @@ export default function App() {
             <Route element={<RequireRole roles={["OWNER", "SUPER_ADMIN"]} />}>
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
+                <Route path="orders" element={<AdminOrders />} />
                 <Route path="menu" element={<AdminMenu />} />
                 <Route element={<RequireRole roles={["SUPER_ADMIN"]} />}>
                   <Route path="users" element={<AdminUsers />} />
