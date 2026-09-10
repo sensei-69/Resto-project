@@ -26,6 +26,7 @@ const ORDER_SELECT = `
          c.email AS customer_email,
          c.phone AS customer_phone,
          d.name  AS delivery_person_name,
+         t.table_number,
          ms.code AS method_of_sale,
          ms.name AS method_of_sale_name,
          pm.code AS payment_method,
@@ -62,6 +63,7 @@ const ORDER_SELECT = `
   FROM orders o
   LEFT JOIN users c       ON c.id  = o.id_customer
   LEFT JOIN users d       ON d.id  = o.id_delivery_person
+  LEFT JOIN dining_table t ON t.id = o.id_table
   JOIN method_of_sale ms  ON ms.id = o.id_method_of_sale
   JOIN payment_method pm  ON pm.id = o.id_payment_method
 `;
@@ -71,12 +73,19 @@ async function loadOrder(id) {
   return rows[0] ?? null;
 }
 
+/** Coerce a request value to a positive integer id, or null when absent/invalid. */
+function toId(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 // ---------------------------------------------------------------------------
 // Checkout lookups (public)
 // ---------------------------------------------------------------------------
 router.get("/options", async (_req, res, next) => {
   try {
-    const [methods, payments, rules] = await Promise.all([
+    const [methods, payments, rules, riders, tables] = await Promise.all([
       query("SELECT id, code, name, description FROM method_of_sale ORDER BY id"),
       query("SELECT id, code, name, description FROM payment_method ORDER BY id"),
       query(
@@ -86,11 +95,18 @@ router.get("/options", async (_req, res, next) => {
          JOIN payment_method pm ON pm.id = r.id_payment_method
          ORDER BY ms.id, pm.id`,
       ),
+      // Riders the customer can pick for a delivery (name only, no contact data).
+      query("SELECT id, name FROM users WHERE role = 'DELIVERY' AND is_active ORDER BY name"),
+      query(
+        "SELECT id, table_number, capacity FROM dining_table WHERE is_active ORDER BY table_number",
+      ),
     ]);
     return res.json({
       methods_of_sale: methods.rows,
       payment_methods: payments.rows,
       rules: rules.rows,
+      riders: riders.rows,
+      tables: tables.rows,
     });
   } catch (err) {
     return next(err);
@@ -119,7 +135,8 @@ router.post("/", optionalAuth, async (req, res, next) => {
   const client = await pool.connect();
   let inTx = false;
   try {
-    const { items, method_of_sale, payment_method, id_table, notes } = req.body ?? {};
+    const { items, method_of_sale, payment_method, id_table, id_delivery_person, notes } =
+      req.body ?? {};
     if (!Array.isArray(items) || !items.length) {
       return res.status(400).json({ error: "items is required and must be non-empty" });
     }
@@ -128,6 +145,27 @@ router.post("/", optionalAuth, async (req, res, next) => {
     if (!mos.rows[0]) return res.status(400).json({ error: "Unknown method_of_sale code" });
     const pm = await client.query("SELECT id FROM payment_method WHERE code = $1", [payment_method]);
     if (!pm.rows[0]) return res.status(400).json({ error: "Unknown payment_method code" });
+
+    // A table only makes sense for dine-in and a rider only for delivery;
+    // anything else sent by the client is ignored.
+    let tableId = null;
+    if (method_of_sale === "DINE_IN" && toId(id_table) !== null) {
+      const t = await client.query(
+        "SELECT id FROM dining_table WHERE id = $1 AND is_active",
+        [toId(id_table)],
+      );
+      if (!t.rows[0]) return res.status(400).json({ error: "This table is not available" });
+      tableId = t.rows[0].id;
+    }
+    let riderId = null;
+    if (method_of_sale === "DELIVERY" && toId(id_delivery_person) !== null) {
+      const r = await client.query(
+        "SELECT id FROM users WHERE id = $1 AND role = 'DELIVERY' AND is_active",
+        [toId(id_delivery_person)],
+      );
+      if (!r.rows[0]) return res.status(400).json({ error: "This rider is not available" });
+      riderId = r.rows[0].id;
+    }
 
     const productIds = items
       .filter((i) => i.id_product !== undefined && i.id_product !== null)
@@ -184,12 +222,14 @@ router.post("/", optionalAuth, async (req, res, next) => {
 
     const { rows: orderRows } = await client.query(
       `INSERT INTO orders
-         (order_number, id_customer, id_table, id_method_of_sale, id_payment_method, notes, total)
-       VALUES ($1, $2, $3, $4, $5, $6, 0) RETURNING *`,
+         (order_number, id_customer, id_table, id_delivery_person,
+          id_method_of_sale, id_payment_method, notes, total)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 0) RETURNING *`,
       [
         orderNumber(),
         req.user?.id ?? null,
-        id_table ?? null,
+        tableId,
+        riderId,
         mos.rows[0].id,
         pm.rows[0].id,
         typeof notes === "string" && notes.trim() ? notes.trim().slice(0, 500) : null,
