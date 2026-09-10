@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import { ensureSchema } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import ticketRoutes from "./routes/tickets.js";
 import catalogRoutes from "./routes/catalog.js";
@@ -36,6 +37,13 @@ app.use((err, _req, res, _next) => {
 });
 
 const port = Number(process.env.PORT ?? 3001);
-app.listen(port, () => {
-  console.log(`Ember & Bun API listening on http://localhost:${port}`);
-});
+
+// Apply additive schema patches before serving so an existing database keeps
+// working after a pull without a manual migration step.
+ensureSchema()
+  .catch((err) => console.error("Schema check failed:", err.message))
+  .finally(() => {
+    app.listen(port, () => {
+      console.log(`Ember & Bun API listening on http://localhost:${port}`);
+    });
+  });

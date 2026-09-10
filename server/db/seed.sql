@@ -56,4 +56,10 @@ FROM (VALUES
 ) AS v(name, name_ar)
 WHERE d.name = v.name AND d.name_ar IS DISTINCT FROM v.name_ar;
 
+-- Starter dining tables for dine-in checkout (1-6: two seats, 7-12: four, 13-14: six).
+INSERT INTO dining_table (table_number, capacity)
+SELECT n, CASE WHEN n <= 6 THEN 2 WHEN n <= 12 THEN 4 ELSE 6 END
+FROM generate_series(1, 14) AS n
+WHERE NOT EXISTS (SELECT 1 FROM dining_table t WHERE t.table_number = n);
+
 COMMIT;
