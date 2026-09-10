@@ -243,12 +243,15 @@ CREATE TRIGGER orders_delivery_person_role
 CREATE TABLE order_item (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_order    BIGINT NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
-  id_product  BIGINT NOT NULL REFERENCES product (id),
+  -- A line is either a product or an offer pack (sold at the pack price).
+  id_product  BIGINT REFERENCES product (id),
+  id_offer    BIGINT REFERENCES offer (id),
   quantity    INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
   -- Snapshot of the product price at order time — protects historical
   -- orders from later menu price changes.
   unit_price  NUMERIC(10, 2) NOT NULL,
-  total_price NUMERIC(10, 2) NOT NULL
+  total_price NUMERIC(10, 2) NOT NULL,
+  CONSTRAINT order_item_target_check CHECK (id_product IS NOT NULL OR id_offer IS NOT NULL)
 );
 
 CREATE INDEX order_item_order_idx ON order_item (id_order);
