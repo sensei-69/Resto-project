@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Banknote,
@@ -8,7 +8,6 @@ import {
   Loader2,
   LogIn,
   Store,
-  Users,
   UtensilsCrossed,
   Zap,
   type LucideIcon,
@@ -18,6 +17,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { money, type CheckoutOptions, type Order, type SaleMethod } from "../lib/orders";
 import type { CartLine, FoodItem } from "./food-select-page/types";
+import { CardSetupModal } from "./CardSetupModal";
 
 const METHOD_ICON: Record<string, LucideIcon> = {
   DINE_IN: UtensilsCrossed,
@@ -76,7 +76,7 @@ interface Props {
 
 export function CheckoutPanel({ onBack, onPlaced }: Props) {
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user, token, updateUser } = useAuth();
   const { lines, foodById, cartTotal, clearLines, setIsCartOpen } = useCart();
 
   const [options, setOptions] = useState<CheckoutOptions | null>(null);
@@ -84,10 +84,14 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
   const [method, setMethod] = useState<SaleMethod>("TAKE_AWAY");
   const [payment, setPayment] = useState("CASH");
   const [riderId, setRiderId] = useState<number | null>(null);
-  const [tableId, setTableId] = useState<number | null>(null);
+  const [address, setAddress] = useState(user?.default_address ?? "");
+  const [addressError, setAddressError] = useState(false);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cardModalOpen, setCardModalOpen] = useState(false);
+  const pendingSubmitRef = useRef(false);
+  const addressRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,19 +124,25 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
     }
   }, [allowedPayments, payment]);
 
+  // Open card modal proactively when user switches to Card with no saved card.
+  useEffect(() => {
+    if (payment === "CARD" && user && !user.card_last4) {
+      setCardModalOpen(true);
+    }
+  }, [payment, user]);
+
   const { items, unorderable } = useMemo(() => buildItems(lines, foodById), [lines, foodById]);
   const count = lines.reduce((s, l) => s + l.qty, 0);
   const methodName = options?.methods_of_sale.find((m) => m.code === method)?.name ?? method;
-  const tables = options?.tables ?? [];
   const riders = options?.riders ?? [];
-  const needsTable = method === "DINE_IN" && tables.length > 0 && tableId === null;
+  const needsAddress = method === "DELIVERY" && !address.trim();
 
   const canSubmit =
     Boolean(user) &&
     Boolean(options) &&
     items.length > 0 &&
     unorderable.length === 0 &&
-    !needsTable;
+    !needsAddress;
 
   const submit = async () => {
     if (!user) {
@@ -143,6 +153,7 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     setError(null);
+    setAddressError(false);
     try {
       const res = await api<{ order: Order }>("/api/orders", {
         method: "POST",
@@ -152,16 +163,34 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
           method_of_sale: method,
           payment_method: payment,
           id_delivery_person: method === "DELIVERY" ? riderId : null,
-          id_table: method === "DINE_IN" ? tableId : null,
+          id_table: null,
+          delivery_address: method === "DELIVERY" ? address.trim() : undefined,
           notes: notes.trim() || undefined,
         },
       });
       clearLines();
       onPlaced(res.order);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not place the order");
+      const msg = err instanceof Error ? err.message : "Could not place the order";
+      if (/ADDRESS_REQUIRED/.test(msg)) {
+        setAddressError(true);
+        addressRef.current?.focus();
+      } else if (/CARD_REQUIRED/.test(msg)) {
+        pendingSubmitRef.current = true;
+        setCardModalOpen(true);
+      } else {
+        setError(msg);
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCardSaved = () => {
+    setCardModalOpen(false);
+    if (pendingSubmitRef.current) {
+      pendingSubmitRef.current = false;
+      void submit();
     }
   };
 
@@ -227,6 +256,28 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
 
         {options && method === "DELIVERY" ? (
           <section className="gc-section">
+            <h3>Where should we deliver?</h3>
+            <textarea
+              ref={addressRef}
+              className={`gc-notes${addressError ? " gc-input--error" : ""}`}
+              rows={2}
+              maxLength={300}
+              value={address}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                if (addressError) setAddressError(false);
+              }}
+              placeholder="Street address, floor, buzzer code\u2026"
+              aria-label="Delivery address"
+            />
+            {addressError ? (
+              <p className="gc-error" style={{ marginTop: 4 }}>Please enter a delivery address.</p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {options && method === "DELIVERY" ? (
+          <section className="gc-section">
             <h3>Who brings it?</h3>
             {riders.length === 0 ? (
               <p className="gc-hint">
@@ -269,39 +320,19 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
           </section>
         ) : null}
 
-        {options && method === "DINE_IN" ? (
-          <section className="gc-section">
-            <h3>Your table</h3>
-            {tables.length === 0 ? (
-              <p className="gc-hint">Tell us your table number in the notes below.</p>
-            ) : (
-              <div className="gc-tables">
-                {tables.map((t) => {
-                  const on = tableId === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`gc-table${on ? " gc-table--on" : ""}`}
-                      onClick={() => setTableId(on ? null : t.id)}
-                      aria-pressed={on}
-                      title={`Table ${t.table_number}, ${t.capacity} seats`}
-                    >
-                      <span className="gc-table-num">{t.table_number}</span>
-                      <span className="gc-table-cap">
-                        <Users /> {t.capacity}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        ) : null}
-
         {options ? (
           <section className="gc-section">
             <h3>Payment</h3>
+            {payment === "CARD" && user?.card_last4 ? (
+              <p className="gc-hint" style={{ marginBottom: 8 }}>
+                {user.card_brand ?? "Card"} \u2022\u2022\u2022\u2022 {user.card_last4}
+                {user.card_expiry ? ` \u00b7 ${user.card_expiry}` : ""}
+                {" "}
+                <button type="button" className="gc-link" onClick={() => setCardModalOpen(true)}>
+                  Change
+                </button>
+              </p>
+            ) : null}
             <div className="gc-options gc-options--2">
               {options.payment_methods.map((p) => {
                 const Icon = PAYMENT_ICON[p.code] ?? Banknote;
@@ -375,13 +406,25 @@ export function CheckoutPanel({ onBack, onPlaced }: Props) {
             </>
           ) : !user ? (
             "Sign in to order"
-          ) : needsTable ? (
-            "Pick your table"
+          ) : needsAddress ? (
+            "Add a delivery address"
           ) : (
             `Place order \u00b7 ${money(cartTotal)}`
           )}
         </button>
       </footer>
+
+      {cardModalOpen ? (
+        <CardSetupModal
+          onSaved={handleCardSaved}
+          onClose={() => {
+            pendingSubmitRef.current = false;
+            setCardModalOpen(false);
+          }}
+          updateUser={updateUser}
+          token={token}
+        />
+      ) : null}
     </div>
   );
 }
