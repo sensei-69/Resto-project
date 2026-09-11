@@ -285,6 +285,139 @@
   height: 11px;
 }
 
+/* Utility helpers */
+.gc-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand, #a80d25);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.gc-input--error {
+  border-color: #dc2626 !important;
+}
+
+/* Card setup modal */
+.csm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10100;
+  padding: 1rem;
+}
+
+.csm-panel {
+  background: var(--cream-1, #fffdf8);
+  border-radius: 1rem;
+  width: 100%;
+  max-width: 26rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.csm-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border, #eadfd0);
+}
+
+.csm-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.csm-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-muted, #8a7f74);
+  display: flex;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+}
+
+.csm-close:hover {
+  background: var(--border, #eadfd0);
+}
+
+.csm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.csm-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink, #171717);
+}
+
+.csm-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.csm-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #eadfd0);
+  border-radius: 0.5rem;
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color 0.15s;
+  background: #fff;
+  color: var(--ink, #171717);
+}
+
+.csm-input:focus {
+  border-color: var(--brand, #a80d25);
+}
+
+.csm-input--mono {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.05em;
+}
+
+.csm-error {
+  font-size: 0.8125rem;
+  color: #dc2626;
+  margin: 0;
+}
+
+.csm-submit {
+  background: var(--brand, #a80d25);
+  color: #fff;
+  border: none;
+  border-radius: 0.625rem;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: opacity 0.15s;
+}
+
+.csm-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .gc-notes {
   width: 100%;
   resize: vertical;
