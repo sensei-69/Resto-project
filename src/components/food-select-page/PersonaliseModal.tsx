@@ -57,15 +57,25 @@ export function PersonaliseModal({
         aria-label={`${food.name} products`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="fs-pers-panel-head">
+        {/* -------- Hero image header -------- */}
+        <div className="fs-pers-hero">
+          <img src={food.image} alt={food.name} className="fs-pers-hero-img" />
+          <div className="fs-pers-hero-scrim" />
+          <div className="fs-pers-hero-info">
+            <h2 className="fs-pers-hero-name">{food.name}</h2>
+            <span className="fs-pers-hero-price">${food.price.toFixed(2)}</span>
+          </div>
           <button
             type="button"
-            className="fs-pers-cancel"
+            className="fs-pers-hero-close"
             onClick={onCancelOrder}
             aria-label={`Close ${food.name} options`}
           >
             <X className="fs-pers-cancel-icon" strokeWidth={2.6} />
           </button>
+        </div>
+
+        <div className="fs-pers-panel-head">
           <button type="button" className="fs-pers-add" onClick={onAddUnit}>
             <Plus className="fs-pers-add-icon" strokeWidth={3} />
             Add {food.name}
