@@ -6,7 +6,8 @@ import { requireAuth, signToken } from "../middleware/auth.js";
 const router = Router();
 
 const PUBLIC_USER = `id, name, email, phone, role, avatar_url, balance,
-  preferred_language, is_active, created_at, updated_at`;
+  preferred_language, is_active, card_holder, card_last4, card_brand, card_expiry,
+  default_address, created_at, updated_at`;
 
 // Roles collected by RegisterPage's role step. OWNER / SUPER_ADMIN are
 // singletons and must never be creatable from the public endpoint.

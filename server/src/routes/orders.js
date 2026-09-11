@@ -2,6 +2,12 @@ import { Router } from "express";
 import { pool, query } from "../db.js";
 import { optionalAuth, requireAuth, requireRole } from "../middleware/auth.js";
 import { httpError } from "../lib/util.js";
+import { notifyAdmins, notifyUser } from "../lib/notify.js";
+import {
+  sendOrderCanceledEmail,
+  sendOrderPlacedEmail,
+  sendOrderStatusEmail,
+} from "../lib/mailer.js";
 
 const router = Router();
 const ADMIN_ROLES = ["OWNER", "SUPER_ADMIN"];
@@ -11,12 +17,17 @@ const ORDER_STATUSES = ["NEW", "CONFIRMED", "PREPARING", "READY", "COMPLETED", "
 const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "REFUNDED"];
 const INGREDIENT_ACTIONS = ["NORMAL", "REMOVED", "ADDED", "SUPPLEMENT"];
 const PAID_ACTIONS = ["ADDED", "SUPPLEMENT"];
+// Steps the customer is told about (in-app + email). PREPARING is too chatty.
+const NOTIFY_STATUSES = ["CONFIRMED", "READY", "COMPLETED"];
 const NUMERIC_ID = /^\d+$/;
+const MIN_REASON = 3;
+const MAX_REASON = 300;
 
 const orderNumber = () =>
   `EB-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 const round2 = (n) => Math.round(n * 100) / 100;
+const money = (n) => `$${Number(n).toFixed(2)}`;
 
 // One row per order: customer / rider names, channel + payment labels and the
 // full item snapshot (including what was removed / added on every line).
@@ -26,6 +37,7 @@ const ORDER_SELECT = `
          c.email AS customer_email,
          c.phone AS customer_phone,
          d.name  AS delivery_person_name,
+         cb.name AS canceled_by_name,
          t.table_number,
          ms.code AS method_of_sale,
          ms.name AS method_of_sale_name,
@@ -61,11 +73,12 @@ const ORDER_SELECT = `
            WHERE oi.id_order = o.id
          ), '[]'::json) AS items
   FROM orders o
-  LEFT JOIN users c       ON c.id  = o.id_customer
-  LEFT JOIN users d       ON d.id  = o.id_delivery_person
-  LEFT JOIN dining_table t ON t.id = o.id_table
-  JOIN method_of_sale ms  ON ms.id = o.id_method_of_sale
-  JOIN payment_method pm  ON pm.id = o.id_payment_method
+  LEFT JOIN users c        ON c.id  = o.id_customer
+  LEFT JOIN users d        ON d.id  = o.id_delivery_person
+  LEFT JOIN users cb       ON cb.id = o.canceled_by
+  LEFT JOIN dining_table t ON t.id  = o.id_table
+  JOIN method_of_sale ms   ON ms.id = o.id_method_of_sale
+  JOIN payment_method pm   ON pm.id = o.id_payment_method
 `;
 
 async function loadOrder(id) {
@@ -78,6 +91,124 @@ function toId(value) {
   if (value === undefined || value === null || value === "") return null;
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** Trimmed cancellation reason, or null when too short to be useful. */
+function cleanReason(value) {
+  if (typeof value !== "string") return null;
+  const reason = value.trim();
+  return reason.length >= MIN_REASON ? reason.slice(0, MAX_REASON) : null;
+}
+
+/** 400 carrying a machine-readable code the checkout UI reacts to. */
+function checkoutError(message, code, extra = {}) {
+  const err = httpError(400, message);
+  err.body = { error: message, code, ...extra };
+  return err;
+}
+
+/** Fire-and-forget side effect: logged on failure, never surfaced to the client. */
+function background(label, fn) {
+  Promise.resolve()
+    .then(fn)
+    .catch((err) => console.error(`[orders] ${label} failed:`, err.message));
+}
+
+function statusText(order) {
+  const m = order.method_of_sale;
+  switch (order.order_status) {
+    case "CONFIRMED":
+      return "is confirmed and queued in the kitchen";
+    case "READY":
+      if (m === "DELIVERY") return "is on the way";
+      if (m === "TAKE_AWAY") return "is ready for pickup";
+      return "is ready and heading to your table";
+    case "COMPLETED":
+      return m === "DELIVERY" ? "has been delivered. Enjoy!" : "is complete. Enjoy!";
+    default:
+      return `is ${String(order.order_status).toLowerCase()}`;
+  }
+}
+
+function afterPlaced(order) {
+  const summary = order.items.map((i) => `${i.quantity}\u00d7 ${i.name}`).join(", ");
+  background("notify placed", async () => {
+    await notifyAdmins({
+      type: "ORDER_NEW",
+      title: `New ${order.method_of_sale_name.toLowerCase()} order #${order.order_number}`,
+      body: `${order.customer_name ?? "Guest"} \u00b7 ${money(order.total)} \u00b7 ${summary}`,
+      idOrder: order.id,
+    });
+    await notifyUser(order.id_customer, {
+      type: "ORDER_PLACED",
+      title: `Order #${order.order_number} placed`,
+      body: `${money(order.total)} \u00b7 ${order.method_of_sale_name}. The kitchen will confirm it shortly.`,
+      idOrder: order.id,
+    });
+  });
+  background("email placed", () => sendOrderPlacedEmail(order));
+}
+
+function afterStatusChange(order, previousStatus) {
+  if (order.order_status === previousStatus) return;
+  if (order.order_status === "CANCELED") {
+    background("notify canceled", () =>
+      notifyUser(order.id_customer, {
+        type: "ORDER_CANCELED",
+        title: `Order #${order.order_number} was cancelled`,
+        body: order.cancel_reason ? `Reason: ${order.cancel_reason}` : null,
+        idOrder: order.id,
+      }),
+    );
+    background("email canceled", () => sendOrderCanceledEmail(order));
+    return;
+  }
+  if (!NOTIFY_STATUSES.includes(order.order_status)) return;
+  background("notify status", () =>
+    notifyUser(order.id_customer, {
+      type: "ORDER_STATUS",
+      title: `Order #${order.order_number} ${statusText(order)}`,
+      body:
+        order.delivery_person_name && order.method_of_sale === "DELIVERY"
+          ? `Rider: ${order.delivery_person_name}`
+          : null,
+      idOrder: order.id,
+    }),
+  );
+  background("email status", () => sendOrderStatusEmail(order));
+}
+
+/**
+ * Cancel inside an open transaction: stamps who / why / when and refunds a
+ * payment that was taken from the customer balance. `extraWhere` narrows the
+ * orders that may be cancelled (its placeholders start at $4).
+ * Returns the updated row or null when nothing matched.
+ */
+async function cancelInTx(client, { id, byUserId, reason, extraWhere = "", params = [] }) {
+  const { rows } = await client.query(
+    `UPDATE orders
+     SET order_status   = 'CANCELED',
+         cancel_reason  = $2,
+         canceled_by    = $3,
+         canceled_at    = now(),
+         payment_status = CASE
+           WHEN paid_from_balance AND payment_status = 'PAID' THEN 'REFUNDED'::payment_status
+           ELSE payment_status
+         END
+     WHERE id = $1 AND order_status <> 'CANCELED' ${extraWhere}
+     RETURNING id, id_customer, total, paid_from_balance,
+               (payment_status = 'REFUNDED') AS refunded`,
+    [id, reason, byUserId, ...params],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  if (row.refunded && row.paid_from_balance && row.id_customer) {
+    await client.query("UPDATE users SET balance = balance + $1 WHERE id = $2", [
+      row.total,
+      row.id_customer,
+    ]);
+  }
+  return row;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,14 +260,23 @@ router.get("/riders", ...adminOnly, async (_req, res, next) => {
 // Place an order
 // ---------------------------------------------------------------------------
 // Body: { items: [{ id_product | id_offer, quantity, ingredients?: [{ id_ingredient, action, quantity? }] }],
-//         method_of_sale, payment_method, id_table?, notes? }
-// Guest checkout allowed: id_customer is set only when a valid token is sent.
+//         method_of_sale, payment_method, id_table?, id_delivery_person?, delivery_address?, notes? }
+// Rules: dine-in table is optional; delivery needs an address; cash is checked
+// against (and taken from) the signed-in customer's balance; card needs a card
+// on file. Guests may still order cash and pay at the counter.
 router.post("/", optionalAuth, async (req, res, next) => {
   const client = await pool.connect();
   let inTx = false;
   try {
-    const { items, method_of_sale, payment_method, id_table, id_delivery_person, notes } =
-      req.body ?? {};
+    const {
+      items,
+      method_of_sale,
+      payment_method,
+      id_table,
+      id_delivery_person,
+      delivery_address,
+      notes,
+    } = req.body ?? {};
     if (!Array.isArray(items) || !items.length) {
       return res.status(400).json({ error: "items is required and must be non-empty" });
     }
@@ -165,6 +305,24 @@ router.post("/", optionalAuth, async (req, res, next) => {
       );
       if (!r.rows[0]) return res.status(400).json({ error: "This rider is not available" });
       riderId = r.rows[0].id;
+    }
+
+    const address =
+      typeof delivery_address === "string" ? delivery_address.trim().slice(0, 300) : "";
+    if (method_of_sale === "DELIVERY" && !address) {
+      return res
+        .status(400)
+        .json({ error: "Tell us where the order should be delivered", code: "ADDRESS_REQUIRED" });
+    }
+
+    if (payment_method === "CARD") {
+      if (!req.user) {
+        return res.status(401).json({ error: "Sign in to pay by card", code: "AUTH_REQUIRED" });
+      }
+      const card = await client.query("SELECT card_last4 FROM users WHERE id = $1", [req.user.id]);
+      if (!card.rows[0]?.card_last4) {
+        return res.status(400).json({ error: "Add a card to pay by card", code: "CARD_REQUIRED" });
+      }
     }
 
     const productIds = items
@@ -217,26 +375,9 @@ router.post("/", optionalAuth, async (req, res, next) => {
       }
     }
 
-    await client.query("BEGIN");
-    inTx = true;
-
-    const { rows: orderRows } = await client.query(
-      `INSERT INTO orders
-         (order_number, id_customer, id_table, id_delivery_person,
-          id_method_of_sale, id_payment_method, notes, total)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 0) RETURNING *`,
-      [
-        orderNumber(),
-        req.user?.id ?? null,
-        tableId,
-        riderId,
-        mos.rows[0].id,
-        pm.rows[0].id,
-        typeof notes === "string" && notes.trim() ? notes.trim().slice(0, 500) : null,
-      ],
-    );
-    const order = orderRows[0];
-
+    // Price every line before touching the database so the balance check
+    // below sees the final total.
+    const lines = [];
     let total = 0;
     for (const item of items) {
       const quantity = Math.max(1, Math.floor(Number(item.quantity)) || 1);
@@ -285,14 +426,66 @@ router.post("/", optionalAuth, async (req, res, next) => {
 
       const lineTotal = round2(unitPrice * quantity + extras);
       total += lineTotal;
+      lines.push({ idProduct, idOffer, quantity, unitPrice, lineTotal, ingredientRows });
+    }
+    total = round2(total);
 
+    await client.query("BEGIN");
+    inTx = true;
+
+    // Payment. Cash from a signed-in customer is taken from the account
+    // balance (row locked so two checkouts cannot overspend); guests pay at
+    // the counter. Card is charged to the saved card.
+    let paymentStatus = "PENDING";
+    let paidFromBalance = false;
+    if (payment_method === "CASH" && req.user) {
+      const { rows } = await client.query("SELECT balance FROM users WHERE id = $1 FOR UPDATE", [
+        req.user.id,
+      ]);
+      const balance = Number(rows[0]?.balance ?? 0);
+      if (balance < total) {
+        throw checkoutError(
+          `Insufficient balance: you have ${money(balance)} and this order is ${money(total)}`,
+          "INSUFFICIENT_BALANCE",
+          { balance, total },
+        );
+      }
+      await client.query("UPDATE users SET balance = balance - $1 WHERE id = $2", [total, req.user.id]);
+      paymentStatus = "PAID";
+      paidFromBalance = true;
+    } else if (payment_method === "CARD") {
+      paymentStatus = "PAID";
+    }
+
+    const { rows: orderRows } = await client.query(
+      `INSERT INTO orders
+         (order_number, id_customer, id_table, id_delivery_person,
+          id_method_of_sale, id_payment_method, notes, total,
+          payment_status, delivery_address, paid_from_balance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [
+        orderNumber(),
+        req.user?.id ?? null,
+        tableId,
+        riderId,
+        mos.rows[0].id,
+        pm.rows[0].id,
+        typeof notes === "string" && notes.trim() ? notes.trim().slice(0, 500) : null,
+        total,
+        paymentStatus,
+        method_of_sale === "DELIVERY" ? address : null,
+        paidFromBalance,
+      ],
+    );
+    const order = orderRows[0];
+
+    for (const line of lines) {
       const { rows: itemRows } = await client.query(
         `INSERT INTO order_item (id_order, id_product, id_offer, quantity, unit_price, total_price)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [order.id, idProduct, idOffer, quantity, unitPrice, lineTotal],
+        [order.id, line.idProduct, line.idOffer, line.quantity, line.unitPrice, line.lineTotal],
       );
-
-      for (const row of ingredientRows) {
+      for (const row of line.ingredientRows) {
         await client.query(
           `INSERT INTO order_item_ingredient (id_order_item, id_ingredient, action, price)
            VALUES ($1, $2, $3, $4)`,
@@ -301,14 +494,15 @@ router.post("/", optionalAuth, async (req, res, next) => {
       }
     }
 
-    await client.query("UPDATE orders SET total = $1 WHERE id = $2", [round2(total), order.id]);
     await client.query("COMMIT");
     inTx = false;
 
     const full = await loadOrder(order.id);
+    afterPlaced(full);
     return res.status(201).json({ order: full });
   } catch (err) {
     if (inTx) await client.query("ROLLBACK").catch(() => {});
+    if (err.body) return res.status(err.status).json(err.body);
     if (err.code === "23503" && String(err.constraint ?? "").includes("sale_payment_rule")) {
       return res.status(400).json({
         error: "This payment method is not available for the selected sale method",
@@ -389,34 +583,55 @@ router.get("/:id", requireAuth, async (req, res, next) => {
 });
 
 // Customers may cancel their own order as long as the kitchen has not
-// confirmed it yet.
+// confirmed it yet. Body: { reason? }. A balance payment is refunded.
 router.patch("/:id/cancel", requireAuth, async (req, res, next) => {
+  if (!NUMERIC_ID.test(req.params.id)) return res.status(404).json({ error: "Order not found" });
+  const client = await pool.connect();
   try {
-    if (!NUMERIC_ID.test(req.params.id)) return res.status(404).json({ error: "Order not found" });
-    const { rows } = await query(
-      `UPDATE orders SET order_status = 'CANCELED'
-       WHERE id = $1 AND id_customer = $2 AND order_status = 'NEW'
-       RETURNING id`,
-      [req.params.id, req.user.id],
-    );
-    if (!rows[0]) {
+    const reason = cleanReason(req.body?.reason) ?? "Cancelled by the customer";
+    await client.query("BEGIN");
+    const row = await cancelInTx(client, {
+      id: req.params.id,
+      byUserId: req.user.id,
+      reason,
+      extraWhere: "AND id_customer = $4 AND order_status = 'NEW'",
+      params: [req.user.id],
+    });
+    if (!row) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         error: "Only your own orders that are still waiting for confirmation can be cancelled",
       });
     }
-    return res.json({ order: await loadOrder(req.params.id) });
+    await client.query("COMMIT");
+
+    const order = await loadOrder(req.params.id);
+    background("notify admin cancel", () =>
+      notifyAdmins({
+        type: "ORDER_CANCELED",
+        title: `Order #${order.order_number} cancelled by the customer`,
+        body: order.cancel_reason,
+        idOrder: order.id,
+      }),
+    );
+    return res.json({ order });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     return next(err);
+  } finally {
+    client.release();
   }
 });
 
 // ---------------------------------------------------------------------------
 // Admin actions
 // ---------------------------------------------------------------------------
+// Body: { order_status?, payment_status?, cancel_reason? }. Moving to CANCELED
+// requires cancel_reason: it is stored on the order and relayed to the customer.
 router.patch("/:id/status", ...adminOnly, async (req, res, next) => {
   try {
     if (!NUMERIC_ID.test(req.params.id)) return res.status(404).json({ error: "Order not found" });
-    const { order_status, payment_status } = req.body ?? {};
+    const { order_status, payment_status, cancel_reason } = req.body ?? {};
     if (order_status !== undefined && !ORDER_STATUSES.includes(order_status)) {
       return res.status(400).json({ error: `order_status must be one of ${ORDER_STATUSES.join(", ")}` });
     }
@@ -426,15 +641,49 @@ router.patch("/:id/status", ...adminOnly, async (req, res, next) => {
     if (order_status === undefined && payment_status === undefined) {
       return res.status(400).json({ error: "Provide order_status and/or payment_status" });
     }
-    const { rows } = await query(
-      `UPDATE orders
-       SET order_status   = COALESCE($2::order_status, order_status),
-           payment_status = COALESCE($3::payment_status, payment_status)
-       WHERE id = $1 RETURNING id`,
-      [req.params.id, order_status ?? null, payment_status ?? null],
-    );
-    if (!rows[0]) return res.status(404).json({ error: "Order not found" });
-    return res.json({ order: await loadOrder(req.params.id) });
+
+    const before = await loadOrder(req.params.id);
+    if (!before) return res.status(404).json({ error: "Order not found" });
+
+    if (order_status === "CANCELED") {
+      const reason = cleanReason(cancel_reason);
+      if (!reason) {
+        return res.status(400).json({
+          error: `Give a cancellation reason (at least ${MIN_REASON} characters)`,
+          code: "REASON_REQUIRED",
+        });
+      }
+      if (before.order_status === "CANCELED") {
+        return res.status(409).json({ error: "This order is already cancelled" });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await cancelInTx(client, { id: req.params.id, byUserId: req.user.id, reason });
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    } else {
+      await query(
+        `UPDATE orders
+         SET order_status   = COALESCE($2::order_status, order_status),
+             payment_status = COALESCE($3::payment_status, payment_status),
+             -- Re-opening a cancelled order clears the cancellation audit.
+             cancel_reason  = CASE WHEN $2::order_status IS NOT NULL THEN NULL ELSE cancel_reason END,
+             canceled_by    = CASE WHEN $2::order_status IS NOT NULL THEN NULL ELSE canceled_by END,
+             canceled_at    = CASE WHEN $2::order_status IS NOT NULL THEN NULL ELSE canceled_at END
+         WHERE id = $1`,
+        [req.params.id, order_status ?? null, payment_status ?? null],
+      );
+    }
+
+    const order = await loadOrder(req.params.id);
+    afterStatusChange(order, before.order_status);
+    return res.json({ order });
   } catch (err) {
     return next(err);
   }

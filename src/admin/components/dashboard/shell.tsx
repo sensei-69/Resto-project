@@ -2,6 +2,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Flame, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuth } from "../../../context/AuthContext";
+import { NotificationBell } from "../../../components/NotificationBell";
 
 export type NavItem = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
@@ -22,17 +23,20 @@ export function DashboardShell({
     <div className="min-h-screen bg-cream-2 text-ink">
       <div className="flex w-full flex-col lg:flex-row">
         <aside className="lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:shrink-0 bg-brown-dark px-4 py-5">
-          <Link to="/" className="flex items-center gap-2">
-            <span
-              className="flex h-9 w-10 items-center justify-center bg-brand"
-              style={{ clipPath: "polygon(0 0, 100% 0, 84% 100%, 0 100%)" }}
-            >
-              <Flame className="h-4 w-4 text-cream-1" />
-            </span>
-            <span className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-cream-1">
-              Ember &amp; Bun
-            </span>
-          </Link>
+          <div className="flex items-center justify-between gap-2">
+            <Link to="/" className="flex items-center gap-2">
+              <span
+                className="flex h-9 w-10 items-center justify-center bg-brand"
+                style={{ clipPath: "polygon(0 0, 100% 0, 84% 100%, 0 100%)" }}
+              >
+                <Flame className="h-4 w-4 text-cream-1" />
+              </span>
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-cream-1">
+                Ember &amp; Bun
+              </span>
+            </Link>
+            <NotificationBell dark />
+          </div>
 
           <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.24em] text-cream-1/45">
             {role} console
@@ -168,10 +172,17 @@ export function StatCard({
   );
 }
 
-export function Pill({ tone = "neutral", children }: { tone?: "brand" | "success" | "neutral" | "muted"; children: ReactNode }) {
+export function Pill({
+  tone = "neutral",
+  children,
+}: {
+  tone?: "brand" | "success" | "warning" | "neutral" | "muted";
+  children: ReactNode;
+}) {
   const tones = {
     brand: "bg-brand/10 text-brand",
     success: "bg-success/12 text-success",
+    warning: "bg-warning/30 text-ink",
     neutral: "bg-cream-3 text-ink-secondary",
     muted: "bg-ink/8 text-ink-muted",
   } as const;

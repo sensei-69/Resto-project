@@ -9,6 +9,7 @@ import offerRoutes from "./routes/offers.js";
 import orderRoutes from "./routes/orders.js";
 import userRoutes from "./routes/users.js";
 import analyticsRoutes from "./routes/analytics.js";
+import notificationRoutes from "./routes/notifications.js";
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use("/api/offers", offerRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 

@@ -4,7 +4,7 @@ export type OrderStatus = "NEW" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLET
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
 export type IngredientAction = "NORMAL" | "REMOVED" | "ADDED" | "SUPPLEMENT";
 export type SaleMethod = "DINE_IN" | "TAKE_AWAY" | "DELIVERY";
-export type Tone = "brand" | "success" | "neutral" | "muted";
+export type Tone = "brand" | "success" | "warning" | "neutral" | "muted";
 
 export type OrderItemIngredient = {
   id_ingredient: number;
@@ -46,6 +46,15 @@ export type Order = {
   method_of_sale_name: string;
   payment_method: string;
   payment_method_name: string;
+  /** Delivery only. */
+  delivery_address: string | null;
+  /** Cancellation audit (who / why / when). */
+  cancel_reason: string | null;
+  canceled_by: number | null;
+  canceled_by_name: string | null;
+  canceled_at: string | null;
+  /** Cash taken from the customer balance (refunded to it on cancel). */
+  paid_from_balance: boolean;
   items: OrderItem[];
 };
 
@@ -109,10 +118,42 @@ export const METHOD_LABEL: Record<SaleMethod, string> = {
   DELIVERY: "Delivery",
 };
 
+/** Channel colour code: dine in = red, take away = yellow, delivery = green. */
+export const METHOD_TONE: Record<SaleMethod, Tone> = {
+  DINE_IN: "brand",
+  TAKE_AWAY: "warning",
+  DELIVERY: "success",
+};
+
+/** Same colour code as CSS values (for inline `--gc-accent` on plain-CSS components). */
+export const METHOD_COLOR: Record<SaleMethod, string> = {
+  DINE_IN: "var(--brand)",
+  TAKE_AWAY: "var(--warning)",
+  DELIVERY: "var(--success)",
+};
+
+/** Same colour code as Tailwind border utilities. */
+export const METHOD_BORDER: Record<SaleMethod, string> = {
+  DINE_IN: "border-brand",
+  TAKE_AWAY: "border-warning",
+  DELIVERY: "border-success",
+};
+
 export const isActiveOrder = (order: Pick<Order, "order_status">) =>
   ACTIVE_STATUSES.includes(order.order_status);
 
 export const money = (value: string | number) => `$${Number(value).toFixed(2)}`;
+
+/** "just now", "12 min ago", "3h ago", then the date. */
+export function timeAgo(iso: string): string {
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 /** Next step on the happy path, or null when the order is finished / cancelled. */
 export function nextStatus(status: OrderStatus): OrderStatus | null {
@@ -162,7 +203,9 @@ export function statusHint(order: Order): string {
     case "COMPLETED":
       return m === "DELIVERY" ? "Delivered. Enjoy your meal!" : "Done. Enjoy your meal!";
     case "CANCELED":
-      return "This order was cancelled.";
+      return order.cancel_reason
+        ? `This order was cancelled: ${order.cancel_reason}`
+        : "This order was cancelled.";
     default:
       return "";
   }

@@ -21,6 +21,12 @@ export type AuthUser = {
   balance: string;
   preferred_language: string | null;
   is_active: boolean;
+  /** Masked saved card: the API never returns the full number. */
+  card_holder: string | null;
+  card_last4: string | null;
+  card_brand: string | null;
+  card_expiry: string | null;
+  default_address: string | null;
 };
 
 export type RegisterInput = {

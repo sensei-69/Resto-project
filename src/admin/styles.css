@@ -27,6 +27,7 @@
   --color-brown: var(--brown);
   --color-brown-dark: var(--brown-dark);
   --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-ink: var(--ink);
   --color-ink-secondary: var(--ink-secondary);
   --color-ink-muted: var(--ink-muted);
@@ -87,6 +88,8 @@
   --brown: oklch(0.383 0.093 45);
   --brown-dark: oklch(0.28 0.069 43);
   --success: oklch(0.585 0.126 137);
+  /* Take-away channel colour (dine in = brand red, delivery = success green). */
+  --warning: oklch(0.82 0.165 85);
   --radius: 0.5rem;
 
   --background: oklch(1 0 0);
