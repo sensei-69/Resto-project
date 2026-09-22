@@ -337,6 +337,7 @@ router.get("/products/:id", async (req, res, next) => {
                   json_build_object(
                     'id_ingredient', pi.id_ingredient,
                     'name', i.name,
+                    'is_available', i.is_available,
                     'is_ingredient', pi.is_ingredient,
                     'is_supplementaire', pi.is_supplementaire,
                     'is_removable', pi.is_removable,

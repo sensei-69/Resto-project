@@ -1,12 +1,16 @@
 export interface Ingredient {
   id: string;
   name: string;
+  /** Whether this ingredient is currently in stock. */
+  available?: boolean;
 }
 
 export interface AddOn {
   id: string;
   name: string;
   price: number;
+  /** Whether this add-on ingredient is currently in stock. */
+  available?: boolean;
 }
 
 export interface FoodItem {
@@ -21,6 +25,10 @@ export interface FoodItem {
   ingredients: Ingredient[];
   /** Paid extras specific to this dish. */
   addOns: AddOn[];
+  /** True when a principal ingredient is out of stock — dish cannot be ordered. */
+  unavailable?: boolean;
+  /** Human-readable reason, e.g. "Missing: Cheddar, Beef patty". */
+  unavailableReason?: string;
 }
 
 export interface SubCategory {

@@ -77,6 +77,7 @@ export function FoodGrid({
           const fav = favorites.includes(food.id);
           const open = units.length > 0 && openDropId === food.id;
           const showEye = selected;
+          const oos = food.unavailable === true;
 
           return (
             <article
@@ -84,6 +85,7 @@ export function FoodGrid({
               className={[
                 "fs-dish",
                 selected ? "fs-dish--selected" : "",
+                oos ? "fs-dish--unavailable" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -99,7 +101,7 @@ export function FoodGrid({
                 <Heart className="fs-dish-fav-icon" strokeWidth={2.4} />
               </button>
 
-              {selected && (
+              {selected && !oos && (
                 <button
                   type="button"
                   className="fs-dish-cancel"
@@ -113,17 +115,28 @@ export function FoodGrid({
               <button
                 type="button"
                 className="fs-dish-photo-btn"
-                onClick={() => onDishClick(food)}
+                onClick={() => !oos && onDishClick(food)}
                 aria-pressed={selected}
+                aria-disabled={oos}
               >
                 <img src={food.image} alt={food.name} className="fs-dish-photo" />
                 <span className="fs-dish-scrim" />
                 <span className="fs-dish-name">{food.name}</span>
                 <span className="fs-dish-price">${food.price.toFixed(2)}</span>
-                {selected && <span className="fs-dish-counter">{count}</span>}
+                {selected && !oos && <span className="fs-dish-counter">{count}</span>}
               </button>
 
-              {showEye && (
+              {/* Unavailable overlay ribbon */}
+              {oos && (
+                <div className="fs-dish-oos-ribbon">
+                  <span className="fs-dish-oos-label">Unavailable</span>
+                  {food.unavailableReason && (
+                    <span className="fs-dish-oos-reason">{food.unavailableReason}</span>
+                  )}
+                </div>
+              )}
+
+              {showEye && !oos && (
                 <button
                   type="button"
                   className="fs-dish-eye"
@@ -134,7 +147,7 @@ export function FoodGrid({
                 </button>
               )}
 
-              {open && (
+              {open && !oos && (
                 <PersonaliseModal
                   food={food}
                   units={units}

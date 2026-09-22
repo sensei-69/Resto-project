@@ -2,3 +2,21 @@ node_modules/
 dist/
 .env
 .env.local"node_modules/" 
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Ignore everything that starts with a dot
+.*
+
+# But keep these tracked
+!.gitignore
+!.github/
+!.env.example

@@ -118,16 +118,23 @@ export function PersonaliseModal({
                       <div className="fs-pers-chips">
                         {food.ingredients.map((ing) => {
                           const off = unit.removed.includes(ing.id);
+                          const ingOos = ing.available === false;
                           return (
                             <button
                               key={ing.id}
                               type="button"
-                              className={off ? "fs-ing-chip fs-ing-chip--off" : "fs-ing-chip"}
-                              onClick={() => onToggleRemoved(index, ing.id)}
+                              className={[
+                                "fs-ing-chip",
+                                off ? "fs-ing-chip--off" : "",
+                                ingOos ? "fs-ing-chip--oos" : "",
+                              ].filter(Boolean).join(" ")}
+                              onClick={() => !ingOos && onToggleRemoved(index, ing.id)}
                               aria-pressed={off}
+                              disabled={ingOos}
                             >
                               {off && <X className="fs-ing-x" strokeWidth={3} />}
                               {ing.name}
+                              {ingOos && <span className="fs-ing-oos-tag">Out of stock</span>}
                             </button>
                           );
                         })}
@@ -139,17 +146,26 @@ export function PersonaliseModal({
                       <div className="fs-pers-chips">
                         {food.addOns.map((addOn) => {
                           const on = (unit.addOns[addOn.id] ?? 0) > 0;
+                          const aoOos = addOn.available === false;
                           return (
                             <button
                               key={addOn.id}
                               type="button"
-                              className={on ? "fs-ing-chip fs-ing-chip--on" : "fs-ing-chip"}
-                              onClick={() => onToggleAddOn(index, addOn.id)}
+                              className={[
+                                "fs-ing-chip",
+                                on ? "fs-ing-chip--on" : "",
+                                aoOos ? "fs-ing-chip--oos" : "",
+                              ].filter(Boolean).join(" ")}
+                              onClick={() => !aoOos && onToggleAddOn(index, addOn.id)}
                               aria-pressed={on}
+                              disabled={aoOos}
                             >
                               {on && <Check className="fs-ing-x" strokeWidth={3} />}
                               {addOn.name}
-                              <span className="fs-pers-chip-price">+${addOn.price.toFixed(2)}</span>
+                              {aoOos
+                                ? <span className="fs-ing-oos-tag">Out of stock</span>
+                                : <span className="fs-pers-chip-price">+${addOn.price.toFixed(2)}</span>
+                              }
                             </button>
                           );
                         })}

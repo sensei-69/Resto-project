@@ -33,6 +33,7 @@ type ApiCategory = {
 type ApiIngredient = {
   id_ingredient: number;
   name: string;
+  is_available: boolean;
   is_ingredient: boolean;
   is_supplementaire: boolean;
   is_removable: boolean;
@@ -57,8 +58,19 @@ function placeholder(text: string, bg = "A80D25") {
 }
 
 function mapProduct(p: ApiProduct): FoodItem {
-  const ingredients = (p.ingredients ?? []).filter((i) => i.is_ingredient && i.is_removable);
-  const addOns = (p.ingredients ?? []).filter((i) => i.is_supplementaire);
+  const allIngs = p.ingredients ?? [];
+  const ingredients = allIngs.filter((i) => i.is_ingredient && i.is_removable);
+  const addOns = allIngs.filter((i) => i.is_supplementaire);
+
+  // A dish is unavailable when any of its principal ingredients is out of stock.
+  const missingPrincipal = allIngs
+    .filter((i) => i.is_ingredient && !i.is_available)
+    .map((i) => i.name);
+  const unavailable = missingPrincipal.length > 0;
+  const unavailableReason = unavailable
+    ? `Missing: ${missingPrincipal.join(", ")}`
+    : undefined;
+
   return {
     id: `db-${p.id}`,
     name: p.name,
@@ -66,14 +78,18 @@ function mapProduct(p: ApiProduct): FoodItem {
     price: Number(p.price),
     image: p.image ?? placeholder(p.name),
     popularity: 50,
+    unavailable,
+    unavailableReason,
     ingredients: ingredients.map((i) => ({
       id: `ing-${i.id_ingredient}`,
       name: i.name,
+      available: i.is_available,
     })),
     addOns: addOns.map((i) => ({
       id: `ao-${i.id_ingredient}`,
       name: i.name,
       price: Number(i.price_supplementaire ?? 0),
+      available: i.is_available,
     })),
   };
 }

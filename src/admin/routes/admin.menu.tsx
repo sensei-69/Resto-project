@@ -331,7 +331,7 @@ function IngredientsTab({
         </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((ing) => {
           const linked = ing.category_links.flatMap((link) => {
             const cat = categories.find((c) => Number(c.id) === link.id_category);
@@ -340,17 +340,30 @@ function IngredientsTab({
           return (
             <div
               key={ing.id}
-              className="rounded-2xl border border-border bg-cream-1 p-4 shadow-sm transition-shadow hover:shadow-md"
+              className={`relative overflow-hidden rounded-2xl border bg-cream-1 shadow-sm transition-all hover:shadow-lg ${
+                ing.is_available ? "border-border" : "border-brand/30 bg-brand/[0.02]"
+              }`}
             >
-              <div className="flex items-start gap-3">
-                <img
-                  src={ing.image ?? FALLBACK_THUMB}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded-full border border-border object-cover"
-                />
+              {/* ── Top section: image + info ── */}
+              <div className="flex items-center gap-4 p-4 pb-3">
+                <div className="relative shrink-0">
+                  <img
+                    src={ing.image ?? FALLBACK_THUMB}
+                    alt=""
+                    className={`h-16 w-16 rounded-xl border-2 object-cover transition-all ${
+                      ing.is_available ? "border-success/40" : "border-brand/40 grayscale-[0.5] opacity-70"
+                    }`}
+                  />
+                  <span
+                    className={`absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-cream-1 ${
+                      ing.is_available ? "bg-success" : "bg-brand"
+                    }`}
+                    title={ing.is_available ? "In stock" : "Out of stock"}
+                  />
+                </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-base font-extrabold text-ink">{ing.name}</h3>
-                  <div className="mt-1.5">
+                  <h3 className="truncate text-[15px] font-extrabold tracking-tight text-ink">{ing.name}</h3>
+                  <div className="mt-2">
                     <ToggleSwitch
                       on={ing.is_available}
                       onChange={() => void toggle(ing)}
@@ -359,7 +372,7 @@ function IngredientsTab({
                     />
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-1.5">
+                <div className="flex shrink-0 flex-col gap-1.5">
                   <button
                     onClick={() => setEditing({ mode: "edit", ingredient: ing })}
                     aria-label={`Modify ${ing.name}`}
@@ -377,16 +390,16 @@ function IngredientsTab({
                 </div>
               </div>
 
-              {/* Category chips */}
-              <div className="mt-3 border-t border-dashed border-border pt-3">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-ink-muted">
-                  Categories
+              {/* ── Bottom section: categories ── */}
+              <div className="border-t border-border/60 bg-cream-2/50 px-4 py-3">
+                <p className="mb-2 text-[9px] font-extrabold uppercase tracking-[0.2em] text-ink-muted">
+                  Linked categories
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {linked.map(({ link, cat }) => (
                     <span
                       key={cat.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-cream-2 py-1 pl-2.5 pr-1.5 text-[11px] font-bold text-ink-secondary"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-cream-1 py-1 pl-2 pr-1.5 text-[10px] font-bold text-ink-secondary shadow-sm"
                     >
                       {cat.image ? (
                         <img src={cat.image} alt="" className="h-4 w-4 rounded-full object-cover" />
@@ -396,8 +409,8 @@ function IngredientsTab({
                     </span>
                   ))}
                   {linked.length === 0 ? (
-                    <span className="text-[11px] text-ink-muted">
-                      Not in any category yet. Use the edit button to associate one.
+                    <span className="text-[10px] italic text-ink-muted">
+                      No category linked yet
                     </span>
                   ) : null}
                 </div>
@@ -1320,60 +1333,67 @@ function ProductsTab({
         </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((item) => (
           <div
             key={item.id}
-            className="group overflow-hidden rounded-2xl border border-border bg-cream-1 shadow-sm transition-shadow hover:shadow-md"
+            className={`group overflow-hidden rounded-2xl border bg-cream-1 shadow-sm transition-all hover:shadow-lg ${
+              item.is_available ? "border-border" : "border-brand/30"
+            }`}
           >
-            <div className="relative h-36">
+            {/* ── Image header ── */}
+            <div className="relative h-44 overflow-hidden">
               <img
                 src={item.image ?? FALLBACK_DISH}
                 alt={item.name}
                 loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                  item.is_available ? "" : "grayscale-[0.5] opacity-75"
+                }`}
               />
-              <span className="absolute left-2.5 top-2.5 rounded-full bg-brown/80 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-cream-1 backdrop-blur-sm">
+              <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
+              <span className="absolute left-3 top-3 rounded-full bg-brown-dark/80 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-cream-1 backdrop-blur-sm">
                 {categoryName(item.id_category)}
               </span>
-              <span className="absolute right-2.5 top-2.5">
+              <span className="absolute right-3 top-3">
                 <Pill tone={item.is_available ? "success" : "brand"}>
                   {item.is_available ? "Available" : "Out"}
                 </Pill>
               </span>
-            </div>
-            <div className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="truncate text-base font-extrabold text-ink">{item.name}</h3>
-                <span className="shrink-0 text-base font-extrabold text-brand">
+              {/* Price + name overlaid on image bottom */}
+              <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
+                <h3 className="truncate text-[15px] font-extrabold tracking-tight text-cream-1 drop-shadow-md">{item.name}</h3>
+                <span className="shrink-0 rounded-full bg-brand px-3 py-1 text-[13px] font-extrabold text-cream-1 shadow-md">
                   ${money(item.price)}
                 </span>
               </div>
-              <div className="mt-3 flex items-center gap-1.5">
-                <button
-                  onClick={() => void toggleStock(item)}
-                  aria-pressed={item.is_available}
-                  className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cream-1 transition-colors ${
-                    item.is_available ? "bg-success hover:brightness-95" : "bg-brand hover:brightness-95"
-                  }`}
-                >
-                  {item.is_available ? "In stock" : "Out of stock"}
-                </button>
-                <button
-                  onClick={() => setEditing({ mode: "edit", product: item })}
-                  aria-label={`Modify ${item.name}`}
-                  className={iconBtn}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => void removeProduct(item.id)}
-                  aria-label={`Delete ${item.name}`}
-                  className={iconBtn}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+            </div>
+
+            {/* ── Actions footer ── */}
+            <div className="flex items-center gap-2 border-t border-border/60 bg-cream-2/40 px-3 py-2.5">
+              <button
+                onClick={() => void toggleStock(item)}
+                aria-pressed={item.is_available}
+                className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-cream-1 transition-colors ${
+                  item.is_available ? "bg-success hover:brightness-95" : "bg-brand hover:brightness-95"
+                }`}
+              >
+                {item.is_available ? "In stock" : "Out of stock"}
+              </button>
+              <button
+                onClick={() => setEditing({ mode: "edit", product: item })}
+                aria-label={`Modify ${item.name}`}
+                className={iconBtn}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => void removeProduct(item.id)}
+                aria-label={`Delete ${item.name}`}
+                className={iconBtn}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
         ))}
